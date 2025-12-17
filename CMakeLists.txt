@@ -1,0 +1,18 @@
+cmake_minimum_required(VERSION 3.30)
+project(libcompression VERSION 0.1.0 LANGUAGES CXX C Fortran)
+
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
+
+find_program(CCACHE_PROGRAM ccache)
+if (CCACHE_PROGRAM)
+    message(STATUS "Found ccache: ${CCACHE_PROGRAM}")
+    set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+endif ()
+
+set(BENCHMARK_CXX_STANDARD 20)
+
+set(CMAKE_CXX_STANDARD ${BENCHMARK_CXX_STANDARD})
+set(CMAKE_CXX_STANDARD_REQUIRED YES)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+add_subdirectory(external)

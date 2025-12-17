@@ -1,0 +1,6 @@
+[submodule "external/pernix"]
+	path = external/pernix
+	url = git@github.com:woobble/pernix.git
+[submodule "external/cp2k"]
+	path = external/cp2k
+	url = https://github.com/cp2k/cp2k.git
