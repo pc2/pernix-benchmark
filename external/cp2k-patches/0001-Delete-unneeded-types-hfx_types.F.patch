@@ -1,14 +1,14 @@
-From 3e84a2da7f0eb7ad566ed7b4ee445860ea940591 Mon Sep 17 00:00:00 2001
+From c63d901b971b5bcf59470c9c6984af05a8c51820 Mon Sep 17 00:00:00 2001
 From: Felix Sternberg <felix@sternberg.cx>
-Date: Wed, 17 Dec 2025 16:43:44 +0100
+Date: Wed, 17 Dec 2025 19:44:46 +0100
 Subject: [PATCH] Delete unneeded types hfx_types.F
 
 ---
- src/hfx_types.F | 2382 +----------------------------------------------
- 1 file changed, 5 insertions(+), 2377 deletions(-)
+ src/hfx_types.F | 2373 +----------------------------------------------
+ 1 file changed, 4 insertions(+), 2369 deletions(-)
 
 diff --git a/src/hfx_types.F b/src/hfx_types.F
-index f86f2084ff..1a189fc22a 100644
+index f86f2084ff..b305c83886 100644
 --- a/src/hfx_types.F
 +++ b/src/hfx_types.F
 @@ -13,78 +13,15 @@
@@ -99,8 +99,7 @@ index f86f2084ff..1a189fc22a 100644
               hfx_set_distr_energy, &
               hfx_set_distr_forces, &
               hfx_cell_type, hfx_distribution, &
--             hfx_potential_type, hfx_screening_type, &
-+             hfx_screening_type, &
+              hfx_potential_type, hfx_screening_type, &
               hfx_memory_type, hfx_load_balance_type, hfx_general_type, &
               hfx_container_type, hfx_cache_type, &
 -             hfx_basis_type, parse_memory_section, &
@@ -119,25 +118,15 @@ index f86f2084ff..1a189fc22a 100644
  
  #define CACHE_SIZE 1024
  #define BITS_MAX_VAL 6
-@@ -135,17 +71,6 @@ MODULE hfx_types
+@@ -137,7 +73,6 @@ MODULE hfx_types
  
- !***
- 
--! **************************************************************************************************
--   TYPE hfx_potential_type
--      INTEGER                                  :: potential_type = do_potential_coulomb !! 1/r/ erfc(wr)/r ...
--      REAL(dp)                                 :: omega = 0.0_dp !! w
--      REAL(dp)                                 :: scale_coulomb = 0.0_dp !! scaling factor for mixed potential
--      REAL(dp)                                 :: scale_longrange = 0.0_dp !! scaling factor for mixed potential
--      REAL(dp)                                 :: scale_gaussian = 0.0_dp!! scaling factor for mixed potential
--      REAL(dp)                                 :: cutoff_radius = 0.0_dp!! cutoff radius if cutoff potential in use
--      CHARACTER(default_path_length)           :: filename = ""
--   END TYPE hfx_potential_type
--
  ! **************************************************************************************************
-    TYPE hfx_screening_type
-       REAL(dp)                                 :: eps_schwarz = 0.0_dp !! threshold
-@@ -333,7 +258,6 @@ MODULE hfx_types
+    TYPE hfx_potential_type
+-      INTEGER                                  :: potential_type = do_potential_coulomb !! 1/r/ erfc(wr)/r ...
+       REAL(dp)                                 :: omega = 0.0_dp !! w
+       REAL(dp)                                 :: scale_coulomb = 0.0_dp !! scaling factor for mixed potential
+       REAL(dp)                                 :: scale_longrange = 0.0_dp !! scaling factor for mixed potential
+@@ -333,7 +268,6 @@ MODULE hfx_types
        REAL(dp)                                 :: Rho = 0.0_dp, RhoInv = 0.0_dp
        REAL(dp)                                 :: P(3) = 0.0_dp, Q(3) = 0.0_dp, W(3) = 0.0_dp
        REAL(dp)                                 :: AB(3) = 0.0_dp, CD(3) = 0.0_dp
@@ -145,7 +134,7 @@ index f86f2084ff..1a189fc22a 100644
     END TYPE hfx_pgf_product_list
  
  ! **************************************************************************************************
-@@ -379,23 +303,12 @@ MODULE hfx_types
+@@ -379,23 +313,12 @@ MODULE hfx_types
                   ncell_RI = 0, nimg = 0, kp_stack_size = 0, nimg_nze = 0, kp_ngroups = 1
        LOGICAL :: check_2c_inv = .FALSE., calc_condnum = .FALSE.
  
@@ -169,7 +158,7 @@ index f86f2084ff..1a189fc22a 100644
        ! block sizes for RI and AO tensor dimensions (split)
        INTEGER, DIMENSION(:), ALLOCATABLE :: bsizes_RI, bsizes_AO, bsizes_RI_split, bsizes_AO_split, &
                                              bsizes_RI_fit, bsizes_AO_fit
-@@ -407,50 +320,11 @@ MODULE hfx_types
+@@ -407,51 +330,9 @@ MODULE hfx_types
        ! KP RI-HFX cost information for a given atom pair i,j at a given cell b
        REAL(dp), DIMENSION(:, :, :), ALLOCATABLE :: kp_cost
  
@@ -195,9 +184,9 @@ index f86f2084ff..1a189fc22a 100644
 -      ! 2c tensor in (RI | RI) format for contraction
 -      TYPE(dbt_type), DIMENSION(:, :), ALLOCATABLE    :: t_2c_int
 -
-       ! 3c integral tensor in (AO RI | AO) format for contraction
+-      ! 3c integral tensor in (AO RI | AO) format for contraction
 -      TYPE(dbt_type), DIMENSION(:, :), ALLOCATABLE :: t_3c_int_ctr_1
-       TYPE(block_ind_type), DIMENSION(:, :), ALLOCATABLE :: blk_indices
+-      TYPE(block_ind_type), DIMENSION(:, :), ALLOCATABLE :: blk_indices
 -      TYPE(dbt_pgrid_type), POINTER                :: pgrid_1 => NULL()
 -
 -      ! 3c integral tensor in ( AO | RI AO) (MO) or (AO RI | AO) (RHO) format for contraction
@@ -217,18 +206,11 @@ index f86f2084ff..1a189fc22a 100644
 -      ! alternatively set unit_nr_dbcsr (for logging tensor operations) and unit_nr (for general
 -      ! output) directly
 -      TYPE(section_vals_type), POINTER :: ri_section => NULL(), hfx_section => NULL()
- 
+-
        ! types of primary and auxiliary basis
        CHARACTER(len=default_string_length) :: orb_basis_type = "", ri_basis_type = ""
-@@ -508,7 +382,6 @@ MODULE hfx_types
- !> \author Manuel Guidon
- ! **************************************************************************************************
-    TYPE hfx_type
--      TYPE(hfx_potential_type)                 :: potential_parameter = hfx_potential_type()
-       TYPE(hfx_screening_type)                 :: screening_parameter = hfx_screening_type()
-       TYPE(hfx_memory_type)                    :: memory_parameter = hfx_memory_type()
-       TYPE(hfx_periodic_type)                  :: periodic_parameter = hfx_periodic_type()
-@@ -533,7 +406,6 @@ MODULE hfx_types
+ 
+@@ -533,7 +414,6 @@ MODULE hfx_types
                                                    b_first_load_balance_forces = .FALSE.
        REAL(dp), DIMENSION(:, :), POINTER        :: full_ks_alpha => NULL()
        REAL(dp), DIMENSION(:, :), POINTER        :: full_ks_beta => NULL()
@@ -236,15 +218,16 @@ index f86f2084ff..1a189fc22a 100644
        TYPE(hfx_basis_info_type)                :: basis_info = hfx_basis_info_type()
        TYPE(hfx_screen_coeff_type), &
           DIMENSION(:, :, :, :, :, :), POINTER     :: screen_funct_coeffs_pgf => NULL(), &
-@@ -555,7 +427,6 @@ MODULE hfx_types
+@@ -554,8 +434,6 @@ MODULE hfx_types
+          POINTER      :: blocks => NULL()
        TYPE(hfx_task_list_type), DIMENSION(:), &
           POINTER        :: task_list => NULL()
-       REAL(dp), DIMENSION(:, :), POINTER        :: pmax_atom => NULL(), pmax_atom_forces => NULL()
+-      REAL(dp), DIMENSION(:, :), POINTER        :: pmax_atom => NULL(), pmax_atom_forces => NULL()
 -      TYPE(cp_libint_t)                         :: lib_deriv
        REAL(dp), DIMENSION(:, :), POINTER        :: pmax_block => NULL()
        LOGICAL, DIMENSION(:, :), POINTER         :: atomic_pair_list => NULL()
        LOGICAL, DIMENSION(:, :), POINTER         :: atomic_pair_list_forces => NULL()
-@@ -565,880 +436,6 @@ MODULE hfx_types
+@@ -565,880 +443,6 @@ MODULE hfx_types
  
  CONTAINS
  
@@ -1125,7 +1108,7 @@ index f86f2084ff..1a189fc22a 100644
  ! **************************************************************************************************
  !> \brief ...
  !> \param ri_data ...
-@@ -1460,324 +457,6 @@ CONTAINS
+@@ -1460,324 +464,6 @@ CONTAINS
        END ASSOCIATE
     END SUBROUTINE hfx_ri_write_stats
  
@@ -1450,7 +1433,7 @@ index f86f2084ff..1a189fc22a 100644
  ! **************************************************************************************************
  !> \brief ...
  !> \param basis_parameter ...
-@@ -1801,641 +480,6 @@ CONTAINS
+@@ -1801,641 +487,6 @@ CONTAINS
  
     END SUBROUTINE hfx_release_basis_types
  
@@ -2092,7 +2075,7 @@ index f86f2084ff..1a189fc22a 100644
     ! performs a fuzzy check of being in a quadrilateral
  ! **************************************************************************************************
  !> \brief ...
-@@ -2627,248 +671,6 @@ CONTAINS
+@@ -2627,248 +678,6 @@ CONTAINS
        END IF
     END SUBROUTINE hfx_reset_memory_usage_counter
  
@@ -2341,7 +2324,7 @@ index f86f2084ff..1a189fc22a 100644
  ! **************************************************************************************************
  !> \brief ...
  !> \param DATA ...
-@@ -2944,179 +746,5 @@ CONTAINS
+@@ -2944,179 +753,5 @@ CONTAINS
  
     END SUBROUTINE alloc_containers
  
