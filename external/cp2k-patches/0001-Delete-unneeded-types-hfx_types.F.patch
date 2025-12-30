@@ -1,14 +1,14 @@
-From c63d901b971b5bcf59470c9c6984af05a8c51820 Mon Sep 17 00:00:00 2001
+From 86212b68607f32fb6c7a00d736ab93801febc9a3 Mon Sep 17 00:00:00 2001
 From: Felix Sternberg <felix@sternberg.cx>
-Date: Wed, 17 Dec 2025 19:44:46 +0100
+Date: Tue, 30 Dec 2025 22:18:34 +0100
 Subject: [PATCH] Delete unneeded types hfx_types.F
 
 ---
- src/hfx_types.F | 2373 +----------------------------------------------
- 1 file changed, 4 insertions(+), 2369 deletions(-)
+ src/hfx_types.F | 2369 +----------------------------------------------
+ 1 file changed, 4 insertions(+), 2365 deletions(-)
 
 diff --git a/src/hfx_types.F b/src/hfx_types.F
-index f86f2084ff..b305c83886 100644
+index 9fe8159398..f23fdc0c2f 100644
 --- a/src/hfx_types.F
 +++ b/src/hfx_types.F
 @@ -13,78 +13,15 @@
@@ -131,7 +131,7 @@ index f86f2084ff..b305c83886 100644
        REAL(dp)                                 :: P(3) = 0.0_dp, Q(3) = 0.0_dp, W(3) = 0.0_dp
        REAL(dp)                                 :: AB(3) = 0.0_dp, CD(3) = 0.0_dp
 -      REAL(dp)                                 :: Fm(prim_data_f_size) = 0.0_dp
-    END TYPE hfx_pgf_product_list
+    END TYPE
  
  ! **************************************************************************************************
 @@ -379,23 +313,12 @@ MODULE hfx_types
@@ -158,7 +158,7 @@ index f86f2084ff..b305c83886 100644
        ! block sizes for RI and AO tensor dimensions (split)
        INTEGER, DIMENSION(:), ALLOCATABLE :: bsizes_RI, bsizes_AO, bsizes_RI_split, bsizes_AO_split, &
                                              bsizes_RI_fit, bsizes_AO_fit
-@@ -407,51 +330,9 @@ MODULE hfx_types
+@@ -407,50 +330,11 @@ MODULE hfx_types
        ! KP RI-HFX cost information for a given atom pair i,j at a given cell b
        REAL(dp), DIMENSION(:, :, :), ALLOCATABLE :: kp_cost
  
@@ -184,9 +184,9 @@ index f86f2084ff..b305c83886 100644
 -      ! 2c tensor in (RI | RI) format for contraction
 -      TYPE(dbt_type), DIMENSION(:, :), ALLOCATABLE    :: t_2c_int
 -
--      ! 3c integral tensor in (AO RI | AO) format for contraction
+       ! 3c integral tensor in (AO RI | AO) format for contraction
 -      TYPE(dbt_type), DIMENSION(:, :), ALLOCATABLE :: t_3c_int_ctr_1
--      TYPE(block_ind_type), DIMENSION(:, :), ALLOCATABLE :: blk_indices
+       TYPE(block_ind_type), DIMENSION(:, :), ALLOCATABLE :: blk_indices
 -      TYPE(dbt_pgrid_type), POINTER                :: pgrid_1 => NULL()
 -
 -      ! 3c integral tensor in ( AO | RI AO) (MO) or (AO RI | AO) (RHO) format for contraction
@@ -206,11 +206,10 @@ index f86f2084ff..b305c83886 100644
 -      ! alternatively set unit_nr_dbcsr (for logging tensor operations) and unit_nr (for general
 -      ! output) directly
 -      TYPE(section_vals_type), POINTER :: ri_section => NULL(), hfx_section => NULL()
--
+ 
        ! types of primary and auxiliary basis
        CHARACTER(len=default_string_length) :: orb_basis_type = "", ri_basis_type = ""
- 
-@@ -533,7 +414,6 @@ MODULE hfx_types
+@@ -533,7 +417,6 @@ MODULE hfx_types
                                                    b_first_load_balance_forces = .FALSE.
        REAL(dp), DIMENSION(:, :), POINTER        :: full_ks_alpha => NULL()
        REAL(dp), DIMENSION(:, :), POINTER        :: full_ks_beta => NULL()
@@ -218,16 +217,15 @@ index f86f2084ff..b305c83886 100644
        TYPE(hfx_basis_info_type)                :: basis_info = hfx_basis_info_type()
        TYPE(hfx_screen_coeff_type), &
           DIMENSION(:, :, :, :, :, :), POINTER     :: screen_funct_coeffs_pgf => NULL(), &
-@@ -554,8 +434,6 @@ MODULE hfx_types
-          POINTER      :: blocks => NULL()
+@@ -555,7 +438,6 @@ MODULE hfx_types
        TYPE(hfx_task_list_type), DIMENSION(:), &
           POINTER        :: task_list => NULL()
--      REAL(dp), DIMENSION(:, :), POINTER        :: pmax_atom => NULL(), pmax_atom_forces => NULL()
+       REAL(dp), DIMENSION(:, :), POINTER        :: pmax_atom => NULL(), pmax_atom_forces => NULL()
 -      TYPE(cp_libint_t)                         :: lib_deriv
        REAL(dp), DIMENSION(:, :), POINTER        :: pmax_block => NULL()
        LOGICAL, DIMENSION(:, :), POINTER         :: atomic_pair_list => NULL()
        LOGICAL, DIMENSION(:, :), POINTER         :: atomic_pair_list_forces => NULL()
-@@ -565,880 +443,6 @@ MODULE hfx_types
+@@ -565,880 +447,6 @@ MODULE hfx_types
  
  CONTAINS
  
@@ -864,7 +862,7 @@ index f86f2084ff..b305c83886 100644
 -
 -      CALL timestop(handle)
 -
--   END SUBROUTINE hfx_ri_init_read_input
+-   END SUBROUTINE
 -
 -! **************************************************************************************************
 -!> \brief ...
@@ -1103,14 +1101,14 @@ index f86f2084ff..b305c83886 100644
 -
 -      CALL timestop(handle)
 -
--   END SUBROUTINE hfx_ri_init
+-   END SUBROUTINE
 -
  ! **************************************************************************************************
  !> \brief ...
  !> \param ri_data ...
-@@ -1460,324 +464,6 @@ CONTAINS
+@@ -1460,324 +468,6 @@ CONTAINS
        END ASSOCIATE
-    END SUBROUTINE hfx_ri_write_stats
+    END SUBROUTINE
  
 -! **************************************************************************************************
 -!> \brief ...
@@ -1296,7 +1294,7 @@ index f86f2084ff..b305c83886 100644
 -      END IF
 -
 -      CALL timestop(handle)
--   END SUBROUTINE hfx_ri_release
+-   END SUBROUTINE
 -
 -! **************************************************************************************************
 -!> \brief - This routine allocates and initializes the basis_info and basis_parameter types
@@ -1433,7 +1431,7 @@ index f86f2084ff..b305c83886 100644
  ! **************************************************************************************************
  !> \brief ...
  !> \param basis_parameter ...
-@@ -1801,641 +487,6 @@ CONTAINS
+@@ -1801,641 +491,6 @@ CONTAINS
  
     END SUBROUTINE hfx_release_basis_types
  
@@ -1967,7 +1965,7 @@ index f86f2084ff..b305c83886 100644
 -               END IF
 -               IF (dist_min < R_max) THEN
 -                  total_number_of_cells = total_number_of_cells + 1
--                  x_data%neighbor_cells(ub)%cell = REAL([ishell, jshell, kshell], dp)
+-                  x_data%neighbor_cells(ub)%cell = REAL((/ishell, jshell, kshell/), dp)
 -                  ub = ub + 1
 -                  image_cell_found = .TRUE.
 -               END IF
@@ -2075,7 +2073,7 @@ index f86f2084ff..b305c83886 100644
     ! performs a fuzzy check of being in a quadrilateral
  ! **************************************************************************************************
  !> \brief ...
-@@ -2627,248 +678,6 @@ CONTAINS
+@@ -2627,248 +682,6 @@ CONTAINS
        END IF
     END SUBROUTINE hfx_reset_memory_usage_counter
  
@@ -2175,10 +2173,10 @@ index f86f2084ff..b305c83886 100644
 -               WRITE (iw, '(T3,A,T61,F20.10)') &
 -                  "HFX_RI_INFO| Omega:     ", ri_metric%omega
 -            CASE (do_potential_id)
--               WRITE (UNIT=iw, FMT="(T3,A,T74,A)") &
+-               WRITE (UNIT=iw, FMT="(T3,A,T73,A)") &
 -                  "HFX_RI_INFO| RI metric: ", "OVERLAP"
 -            CASE (do_potential_truncated)
--               WRITE (UNIT=iw, FMT="(T3,A,T64,A)") &
+-               WRITE (UNIT=iw, FMT="(T3,A,T72,A)") &
 -                  "HFX_RI_INFO| RI metric: ", "TRUNCATED COULOMB"
 -               rc_ang = cp_unit_from_cp2k(ri_metric%cutoff_radius, "angstrom")
 -               WRITE (iw, '(T3,A,T61,F20.10)') &
@@ -2224,7 +2222,7 @@ index f86f2084ff..b305c83886 100644
 -            "HFX_RI_INFO| Memory reduction factor", ri_data%n_mem_input
 -      END IF
 -
--   END SUBROUTINE hfx_print_ri_info
+-   END SUBROUTINE
 -
 -! **************************************************************************************************
 -!> \brief ...
@@ -2319,12 +2317,12 @@ index f86f2084ff..b305c83886 100644
 -
 -      CALL cp_print_key_finished_output(iw, logger, hfx_section, &
 -                                        "HF_INFO")
--   END SUBROUTINE hfx_print_info
+-   END SUBROUTINE
 -
  ! **************************************************************************************************
  !> \brief ...
  !> \param DATA ...
-@@ -2944,179 +753,5 @@ CONTAINS
+@@ -2944,179 +757,5 @@ CONTAINS
  
     END SUBROUTINE alloc_containers
  
@@ -2364,7 +2362,7 @@ index f86f2084ff..b305c83886 100644
 -
 -         CALL section_vals_val_get(hfx_section1, "PW_HFX_BLOCKSIZE", i_val=ival1, i_rep_section=irep)
 -         CALL section_vals_val_get(hfx_section2, "PW_HFX_BLOCKSIZE", i_val=ival2, i_rep_section=irep)
--         IF (ival1 /= ival2) is_identical = .FALSE.
+-         IF (ival1 .NE. ival2) is_identical = .FALSE.
 -
 -         CALL section_vals_val_get(hfx_section1, "TREAT_LSD_IN_CORE", l_val=lval1, i_rep_section=irep)
 -         CALL section_vals_val_get(hfx_section2, "TREAT_LSD_IN_CORE", l_val=lval2, i_rep_section=irep)
@@ -2379,7 +2377,7 @@ index f86f2084ff..b305c83886 100644
 -
 -         CALL section_vals_val_get(hfx_sub_section1, "POTENTIAL_TYPE", i_val=ival1, i_rep_section=irep)
 -         CALL section_vals_val_get(hfx_sub_section2, "POTENTIAL_TYPE", i_val=ival2, i_rep_section=irep)
--         IF (ival1 /= ival2) is_identical = .FALSE.
+-         IF (ival1 .NE. ival2) is_identical = .FALSE.
 -         IF (.NOT. is_identical) RETURN
 -
 -         IF (ival1 == do_potential_truncated .OR. ival1 == do_potential_mix_cl_trunc) THEN
@@ -2389,7 +2387,7 @@ index f86f2084ff..b305c83886 100644
 -
 -            CALL section_vals_val_get(hfx_sub_section1, "T_C_G_DATA", c_val=cval1, i_rep_section=irep)
 -            CALL section_vals_val_get(hfx_sub_section2, "T_C_G_DATA", c_val=cval2, i_rep_section=irep)
--            IF (cval1 /= cval2) is_identical = .FALSE.
+-            IF (cval1 .NE. cval2) is_identical = .FALSE.
 -         END IF
 -
 -         CALL section_vals_val_get(hfx_sub_section1, "SCALE_COULOMB", r_val=rval1, i_rep_section=irep)
@@ -2409,7 +2407,7 @@ index f86f2084ff..b305c83886 100644
 -
 -         CALL section_vals_val_get(hfx_sub_section1, "NUMBER_OF_SHELLS", i_val=ival1, i_rep_section=irep)
 -         CALL section_vals_val_get(hfx_sub_section2, "NUMBER_OF_SHELLS", i_val=ival2, i_rep_section=irep)
--         IF (ival1 /= ival2) is_identical = .FALSE.
+-         IF (ival1 .NE. ival2) is_identical = .FALSE.
 -
 -         hfx_sub_section1 => section_vals_get_subs_vals(hfx_section1, "RI", i_rep_section=irep)
 -         hfx_sub_section2 => section_vals_get_subs_vals(hfx_section2, "RI", i_rep_section=irep)
@@ -2444,11 +2442,11 @@ index f86f2084ff..b305c83886 100644
 -
 -         CALL section_vals_val_get(hfx_sub_section1, "MAX_BLOCK_SIZE_MO", i_val=ival1, i_rep_section=irep)
 -         CALL section_vals_val_get(hfx_sub_section2, "MAX_BLOCK_SIZE_MO", i_val=ival2, i_rep_section=irep)
--         IF (ival1 /= ival2) is_identical = .FALSE.
+-         IF (ival1 .NE. ival2) is_identical = .FALSE.
 -
 -         CALL section_vals_val_get(hfx_sub_section1, "MIN_BLOCK_SIZE", i_val=ival1, i_rep_section=irep)
 -         CALL section_vals_val_get(hfx_sub_section2, "MIN_BLOCK_SIZE", i_val=ival2, i_rep_section=irep)
--         IF (ival1 /= ival2) is_identical = .FALSE.
+-         IF (ival1 .NE. ival2) is_identical = .FALSE.
 -
 -         CALL section_vals_val_get(hfx_sub_section1, "OMEGA", r_val=rval1, i_rep_section=irep)
 -         CALL section_vals_val_get(hfx_sub_section2, "OMEGA", r_val=rval2, i_rep_section=irep)
@@ -2456,11 +2454,11 @@ index f86f2084ff..b305c83886 100644
 -
 -         CALL section_vals_val_get(hfx_sub_section1, "RI_FLAVOR", i_val=ival1, i_rep_section=irep)
 -         CALL section_vals_val_get(hfx_sub_section2, "RI_FLAVOR", i_val=ival2, i_rep_section=irep)
--         IF (ival1 /= ival2) is_identical = .FALSE.
+-         IF (ival1 .NE. ival2) is_identical = .FALSE.
 -
 -         CALL section_vals_val_get(hfx_sub_section1, "RI_METRIC", i_val=ival1, i_rep_section=irep)
 -         CALL section_vals_val_get(hfx_sub_section2, "RI_METRIC", i_val=ival2, i_rep_section=irep)
--         IF (ival1 /= ival2) is_identical = .FALSE.
+-         IF (ival1 .NE. ival2) is_identical = .FALSE.
 -
 -         hfx_sub_section1 => section_vals_get_subs_vals(hfx_section1, "SCREENING", i_rep_section=irep)
 -         hfx_sub_section2 => section_vals_get_subs_vals(hfx_section2, "SCREENING", i_rep_section=irep)

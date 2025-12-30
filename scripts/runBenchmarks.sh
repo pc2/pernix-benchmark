@@ -83,6 +83,7 @@ patch_cp2k() {
   fi
 
   pushd "$cp2k_source_dir" > /dev/null || { echo "Failed to enter CP2K source directory"; exit 1; }
+  git checkout support/v2025.2 || { echo "Failed to checkout CP2K support/v2025.2 branch"; popd > /dev/null || exit; exit 1; }
   if git apply --check "$patch_abs" 2>/dev/null; then
     git apply "$patch_abs" || { echo "Failed to apply patch $patch_file"; popd > /dev/null || exit; exit 1; }
     echo "Applied patch $patch_file successfully."

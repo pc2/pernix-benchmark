@@ -10,7 +10,6 @@ set(CP2K_SOURCE_FILES
     cp2k/src/base/machine.F
     cp2k/src/base/base_hooks.F
     cp2k/src/common/cp_files.F
-    cp2k/src/common/cp_data_dir.c
     cp2k/src/hfxbase/hfx_compression_core_methods.F
     cp2k/src/hfx_compression_methods.F
 )
