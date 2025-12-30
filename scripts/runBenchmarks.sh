@@ -28,6 +28,7 @@ Options:
   -c, --compiler COMPILER     Specify compiler to use (e.g. gcc, clang)
       --release_type TYPE     Specify release type (e.g. Debug, Release)
   -s, --slurm                 Run benchmarks using SLURM job scheduler
+  -m, --modules               Load required modules for PC2 environment
   -h, --help                  Show this help message and exit
 USAGE
 }
@@ -174,11 +175,12 @@ collect_machinestate() {
   echo "Machine state collected and saved to machinestate.json"
 }
 
-PARSED=$(getopt -o c,t:sh -l compiler:,target:,list_targets,release_type:,slurm:help -n runBenchmarks.sh -- "$@") || { echo "Invalid options"; exit 2; }
+PARSED=$(getopt -o c,t:shm -l compiler:,target:,list_targets,release_type:,slurm,modules:help -n runBenchmarks.sh -- "$@") || { echo "Invalid options"; exit 2; }
 eval set -- "$PARSED"
 COMPILER="g++"
 RELEASE_TYPE="RELEASE"
 TARGETS=("${AVAILABLE_TARGETS[@]}")
+INSTALL_PC2_MODULES=0
 SLURM_EXECUTION=0
 if [ -n "$SLURM_JOB_ID" ]; then
   SLURM_EXECUTION=1
@@ -197,13 +199,15 @@ while true; do
     --release_type) RELEASE_TYPE="$2"; shift 2 ;;
     --list_targets) print_available_targets; exit 0 ;;
     -s|--slurm) SLURM_EXECUTION=1; shift ;;
+    -m|--modules) INSTALL_PC2_MODULES=1; shift ;;
     -h|--help) print_help; exit 0 ;;
     --) shift; break ;;
     *) echo "Internal error while parsing options"; exit 3 ;;
   esac
 done
 
-if [ "$SLURM_EXECUTION" -eq 1 ]; then
+# Load modules if requested or if running under SLURM
+if [ "$INSTALL_PC2_MODULES" -eq 1 ] || [ "$SLURM_EXECUTION" -eq 1 ]; then
   if [ -z "$SLURM_JOB_ID" ]; then
     echo "This script is set to run with SLURM, but no SLURM job ID is found. Please submit the script via sbatch or srun."
     exit 1
@@ -214,7 +218,6 @@ if [ "$SLURM_EXECUTION" -eq 1 ]; then
   module load devel/CMake/4.0.3-GCCcore-14.3.0
   module load tools/googlebenchmark/1.9.4-GCCcore-14.3.0
   module load tools/googletest/1.17.0-GCCcore-14.3.0
-  module load devel/CMake/4.0.3-GCCcore-14.3.0
 fi
 
 # Check for required tools: cmake, make, and the specified compiler
