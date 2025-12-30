@@ -16,3 +16,5 @@ set(CMAKE_CXX_STANDARD_REQUIRED YES)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_subdirectory(external)
+
+add_subdirectory(src)
