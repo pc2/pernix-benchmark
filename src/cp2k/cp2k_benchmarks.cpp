@@ -4,14 +4,15 @@ using namespace benchmark;
 using namespace benchmark::internal;
 
 extern "C" {
-    double cp2k_compression(State& state, int iterations, int width, int nv);
-    double cp2k_decompression(State& state, int iterations, int width, int nv);
+double cp2k_compression(State& state, int iterations, int width, int nv);
+
+double cp2k_decompression(State& state, int iterations, int width, int nv);
 }
 
-template <class ...Args>
+template <class... Args>
 void BM_cp2k_compression(State& state, Args&&... args) {
-    auto args_tuple = std::make_tuple(std::move(args)...);
-    const int width = std::get<0>(args_tuple);
+    auto args_tuple                        = std::make_tuple(std::move(args)...);
+    const int width                        = std::get<0>(args_tuple);
     constexpr uint32_t internal_iterations = 1 << 10; // 1024
 
     constexpr uint32_t nv = 1024;
@@ -28,10 +29,10 @@ void BM_cp2k_compression(State& state, Args&&... args) {
     // state.counters["compressed_bytes_per_second"] = 0;
 }
 
-template <class ...Args>
+template <class... Args>
 void BM_cp2k_decompression(State& state, Args&&... args) {
-    auto args_tuple = std::make_tuple(std::move(args)...);
-    const int width = std::get<0>(args_tuple);
+    auto args_tuple                        = std::make_tuple(std::move(args)...);
+    const int width                        = std::get<0>(args_tuple);
     constexpr uint32_t internal_iterations = 1 << 10; // 1024
 
     constexpr uint32_t nv = 1024;
