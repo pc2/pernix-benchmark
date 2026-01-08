@@ -2,12 +2,13 @@
 
 #SBATCH -J "Pernix and CP2K Number De/Compression Benchmarks"
 #SBATCH -A hpc-prf-ecderi
-#SBATCH -t 01:00:00
+#SBATCH -t 05:00:00
 #SBATCH -N 1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=64G
 #SBATCH --exclusive
+#SBATCH -p normal
 
 # Navigate to project root if script is run from scripts directory
 if [ "$(basename "$PWD")" == "scripts" ]; then
@@ -135,9 +136,17 @@ run_benchmarks() {
 
     echo "Running benchmark target: $t"
     if [ "$slurm_execution" -eq 1 ]; then
-      srun --exclusive likwid-pin -c "$PIN" ./"$benchmark_executable" --benchmark_out="$output_file" --benchmark_out_format=json || { echo "Benchmark $t failed"; exit 1; }
+      if [ -n "$PIN" ]; then
+        srun --exclusive likwid-pin -c "$PIN" ./"$benchmark_executable" --benchmark_out="$output_file" --benchmark_out_format=json || { echo "Benchmark $t failed"; exit 1; }
+      else
+        srun ./"$benchmark_executable" --benchmark_out="$output_file" --benchmark_out_format=json || { echo "Benchmark $t failed"; exit 1; }
+      fi
     else
-      likwid-pin -c "$PIN" ./"$benchmark_executable" --benchmark_out="$output_file" --benchmark_out_format=json || { echo "Benchmark $t failed"; exit 1; }
+      if [ -n "$PIN" ]; then
+        likwid-pin -c "$PIN" ./"$benchmark_executable" --benchmark_out="$output_file" --benchmark_out_format=json || { echo "Benchmark $t failed"; exit 1; }
+      else
+        ./"$benchmark_executable" --benchmark_out="$output_file" --benchmark_out_format=json || { echo "Benchmark $t failed"; exit 1; }
+      fi
     fi
     echo "Benchmark for target $t completed. Results saved to $output_file"
   done
