@@ -1,5 +1,5 @@
-add_subdirectory(/home/woobb/Projects/libcompression libcompression)
-#add_subdirectory(pernix)
+#add_subdirectory(/home/woobb/Projects/libcompression libcompression)
+add_subdirectory(pernix)
 
 # apply patch to CP2K source files to build a static library for compression methods
 
