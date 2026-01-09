@@ -153,12 +153,13 @@ __always_inline void BM_decompress_blocks(benchmark::State &state,
             alignas(64) float_t *block_output = benchmark_set->output_ptr;
 
             for (uint32_t block = 0; block < number_of_blocks; block++) {
-                decompress_function(block_input, benchmark_set->scales[block], block_output);
+                decompress_function(block_input + block * 64, benchmark_set->scales[block],
+                                    block_output + block * elements_per_block);
                 benchmark::DoNotOptimize(block_input);
                 benchmark::DoNotOptimize(benchmark_set->scales.data());
                 benchmark::DoNotOptimize(block_output);
-                block_input += 32;
-                block_output += elements_per_block;
+                // block_input += 32;
+                // block_output += elements_per_block;
                 benchmark::ClobberMemory();
             }
         }
@@ -203,12 +204,13 @@ __always_inline void BM_compress_blocks(benchmark::State &state,
             alignas(64) uint8_t *block_output = benchmark_set->output_ptr;
 
             for (uint32_t block = 0; block < number_of_blocks; block++) {
-                compress_function(block_input, benchmark_set->scales[block], block_output);
+                compress_function(block_input + block * elements_per_block, benchmark_set->scales[block],
+                                  block_output + block * 64);
                 benchmark::DoNotOptimize(block_input);
                 benchmark::DoNotOptimize(benchmark_set->scales.data());
                 benchmark::DoNotOptimize(block_output);
-                block_input += elements_per_block;
-                block_output += 32;
+                // block_input += elements_per_block;
+                // block_output += 32;
                 benchmark::ClobberMemory();
             }
         }

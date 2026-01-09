@@ -304,10 +304,10 @@ fi
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR" || { echo "Failed to enter build directory"; exit 1; }
 
-if [ "$CLEAN_BUILD" -eq 1 ]; then
-  echo "Cleaning build directory..."
-  rm -rf "$BUILD_DIR"
-fi
+#if [ "$CLEAN_BUILD" -eq 1 ]; then
+#  echo "Cleaning build directory..."
+#  rm -rf "$BUILD_DIR"
+#fi
 
 build_benchmarks "$COMPILER" "$RELEASE_TYPE" TARGETS[@] "$SLURM_EXECUTION"
 run_benchmarks TARGETS[@] "$SLURM_EXECUTION" "$WORK_DIR"

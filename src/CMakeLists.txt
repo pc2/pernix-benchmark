@@ -15,6 +15,7 @@ list(APPEND PERNIX_VARIANTS
         avx512vbmi
 )
 
+target_compile_options(libcompression PUBLIC -v -g -march=native)
 foreach (variant IN LISTS PERNIX_VARIANTS)
     file(GLOB_RECURSE
             SOURCE_FILES
@@ -31,7 +32,6 @@ foreach (variant IN LISTS PERNIX_VARIANTS)
     endif ()
     target_include_directories(bench_pernix_${variant} PRIVATE pernix/include)
 endforeach ()
-target_compile_options(libcompression PUBLIC -v -g -march=native)
 target_compile_options(bench_pernix_fallback PUBLIC -g -march=x86-64)
 target_compile_options(bench_pernix_avx2 PUBLIC -g -march=x86-64-v2)
 target_compile_options(bench_pernix_bmi2 PUBLIC -g -march=x86-64-v2)
