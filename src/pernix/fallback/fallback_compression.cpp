@@ -2,7 +2,7 @@
 #include <libcompression.h>
 
 #define BENCHMARK_COMPRESS_BLOCKS_FALLBACK_FUNCTION(N, MEM) \
-    BENCHMARK_COMPRESS_BLOCKS_FUNCTION(decompress_block_fallback, libcompression::compress_block_fallback, N, MEM);
+    BENCHMARK_COMPRESS_BLOCKS_FUNCTION(compress_block_fallback, libcompression::compress_block_fallback, N, MEM);
 
 // BENCHMARK_COMPRESS_BLOCKS_FALLBACK_FUNCTION(1, true);
 // BENCHMARK_COMPRESS_BLOCKS_FALLBACK_FUNCTION(2, true);

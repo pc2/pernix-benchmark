@@ -33,16 +33,13 @@ struct DecompressionBenchmarkSet {
 
     explicit DecompressionBenchmarkSet(const uint64_t number_of_blocks) : number_of_blocks(number_of_blocks) {
         constexpr int64_t elements_per_block = 512 / BIT_WIDTH;
-        const int64_t total_bits = number_of_blocks * elements_per_block * BIT_WIDTH;
-        const int64_t num_bytes = (total_bits + 7) / 8;
         std::random_device rd;
         std::mt19937 gen(rd());
         std::uniform_int_distribution<int8_t> dis{};
         std::uniform_real_distribution scale_dis(0.0001f, 1.0f);
 
-        const size_t in_bytes = detail::round_up_to(static_cast<size_t>(num_bytes), 64);
-        const size_t out_bytes =
-                detail::round_up_to(number_of_blocks * elements_per_block * sizeof(float_t), 64);
+        const size_t in_bytes = detail::round_up_to(64u * number_of_blocks, 64);
+        const size_t out_bytes = detail::round_up_to(number_of_blocks * elements_per_block * sizeof(float_t), 64);
 
         input_ptr = static_cast<uint8_t *>(std::aligned_alloc(64, in_bytes));
         output_ptr = static_cast<float_t *>(std::aligned_alloc(64, out_bytes));
@@ -54,7 +51,7 @@ struct DecompressionBenchmarkSet {
             scale = scale_dis(gen);
         }
 
-        for (int64_t i = 0; i < num_bytes; ++i) {
+        for (int64_t i = 0; i < (64u * number_of_blocks); ++i) {
             input_ptr[i] = static_cast<uint8_t>(dis(gen));
         }
     }
@@ -78,17 +75,13 @@ struct CompressionBenchmarkSet {
 
     explicit CompressionBenchmarkSet(const uint64_t number_of_blocks) : number_of_blocks(number_of_blocks) {
         constexpr int64_t elements_per_block = 512 / BIT_WIDTH;
-        const int64_t total_bits = number_of_blocks * elements_per_block * BIT_WIDTH;
-        const int64_t num_bytes = (total_bits + 7) / 8;
         std::random_device rd;
         std::mt19937 gen(rd());
         std::uniform_real_distribution<float_t> dis{};
         std::uniform_real_distribution scale_dis(0.0001f, 1.0f);
 
-        const size_t out_bytes = detail::round_up_to(static_cast<size_t>(num_bytes), 64);
-        const int64_t total_floats = number_of_blocks * elements_per_block;
-        const size_t in_bytes =
-                detail::round_up_to(number_of_blocks * elements_per_block * sizeof(float_t), 64);
+        const size_t out_bytes = detail::round_up_to(64 * number_of_blocks, 64);
+        const size_t in_bytes = detail::round_up_to(elements_per_block * number_of_blocks * sizeof(float_t), 64);
 
         output_ptr = static_cast<uint8_t *>(std::aligned_alloc(64, out_bytes));
         input_ptr = static_cast<float_t *>(std::aligned_alloc(64, in_bytes));
@@ -100,7 +93,7 @@ struct CompressionBenchmarkSet {
             scale = scale_dis(gen);
         }
 
-        for (int64_t i = 0; i < total_floats; ++i) {
+        for (int64_t i = 0; i < (number_of_blocks * elements_per_block); ++i) {
             input_ptr[i] = dis(gen);
         }
     }
@@ -116,6 +109,7 @@ struct CompressionBenchmarkSet {
     }                                                              \
     BENCHMARK_DECOMPRESS_BLOCKS_REGISTER(name##_##MEM##_##N);
 
+
 #define BENCHMARK_COMPRESS_BLOCKS_REGISTER(name) \
     BENCHMARK(BM_##name)->RangeMultiplier(2)->Range(1 << 0, 1 << 22)
 
@@ -124,6 +118,7 @@ struct CompressionBenchmarkSet {
         BM_compress_blocks<N, true, MEM>(state, func<N>);           \
     }                                                               \
     BENCHMARK_COMPRESS_BLOCKS_REGISTER(name##_##MEM##_##N);
+
 
 template<uint8_t BIT_WIDTH, bool SIGN_VALUES, bool DISABLE_MEM>
     requires(BIT_WIDTH >= 1 && BIT_WIDTH <= 24)
@@ -153,7 +148,7 @@ __always_inline void BM_decompress_blocks(benchmark::State &state,
             alignas(64) float_t *block_output = benchmark_set->output_ptr;
 
             for (uint32_t block = 0; block < number_of_blocks; block++) {
-                decompress_function(block_input + block * 64, benchmark_set->scales[block],
+                decompress_function(block_input + block * 32, benchmark_set->scales[block],
                                     block_output + block * elements_per_block);
                 benchmark::DoNotOptimize(block_input);
                 benchmark::DoNotOptimize(benchmark_set->scales.data());
