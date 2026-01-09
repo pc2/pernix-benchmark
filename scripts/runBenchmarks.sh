@@ -32,6 +32,7 @@ Options:
   -s, --slurm                 Run benchmarks using SLURM job scheduler
   -m, --modules               Load required modules for PC2 environment
       --pin                   Pin benchmark to a specific CPU core
+      --clean                 Clean build directory before building
   -h, --help                  Show this help message and exit
 USAGE
 }
@@ -195,7 +196,7 @@ collect_machine_information() {
   fi
 }
 
-PARSED=$(getopt -o c:t:o:shm -l compiler:,target:,list-targets,release-type:,output:,slurm,modules,pin:,help -n runBenchmarks.sh -- "$@") || { echo "Invalid options"; exit 2; }
+PARSED=$(getopt -o c:t:o:shm -l compiler:,target:,list-targets,release-type:,output:,slurm,modules,pin:,help,clean -n runBenchmarks.sh -- "$@") || { echo "Invalid options"; exit 2; }
 eval set -- "$PARSED"
 COMPILER="g++"
 RELEASE_TYPE="RELEASE"
@@ -204,6 +205,7 @@ FINAL_OUTPUT="benchmark_results.tar.gz"
 INSTALL_PC2_MODULES=0
 SLURM_EXECUTION=0
 PIN=""
+CLEAN_BUILD=0
 if [ -n "$SLURM_JOB_ID" ]; then
   SLURM_EXECUTION=1
   echo "Detected SLURM environment. SLURM execution mode enabled."
@@ -224,6 +226,7 @@ while true; do
     -s|--slurm) SLURM_EXECUTION=1; shift ;;
     -m|--modules) INSTALL_PC2_MODULES=1; shift ;;
     --pin) PIN="$2"; shift 2 ;;
+    --clean) CLEAN_BUILD=1; shift ;;
     -h|--help) print_help; exit 0 ;;
     --) shift; break ;;
     *) echo "Internal error while parsing options"; exit 3 ;;
@@ -300,6 +303,11 @@ if [ -n "$RELEASE_TYPE" ]; then
 fi
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR" || { echo "Failed to enter build directory"; exit 1; }
+
+if [ "$CLEAN_BUILD" -eq 1 ]; then
+  echo "Cleaning build directory..."
+  rm -rf "$BUILD_DIR"
+fi
 
 build_benchmarks "$COMPILER" "$RELEASE_TYPE" TARGETS[@] "$SLURM_EXECUTION"
 run_benchmarks TARGETS[@] "$SLURM_EXECUTION" "$WORK_DIR"
