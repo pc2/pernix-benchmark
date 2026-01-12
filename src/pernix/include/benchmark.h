@@ -148,7 +148,7 @@ __always_inline void BM_decompress_blocks(benchmark::State &state,
             alignas(64) float_t *block_output = benchmark_set->output_ptr;
 
             for (uint32_t block = 0; block < number_of_blocks; block++) {
-                decompress_function(block_input + block * 32, benchmark_set->scales[block],
+                decompress_function(block_input + block * 64, benchmark_set->scales[block],
                                     block_output + block * elements_per_block);
                 benchmark::DoNotOptimize(block_input);
                 benchmark::DoNotOptimize(benchmark_set->scales.data());
