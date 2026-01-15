@@ -17,7 +17,7 @@ set(CP2K_SOURCE_FILES
 
 add_library(cp2k_compression STATIC ${CP2K_SOURCE_FILES})
 target_compile_options(cp2k_compression PRIVATE -fopenmp)
-target_compile_options(cp2k_compression PRIVATE $<$<COMPILE_LANGUAGE:Fortran>:-ffree-form -ffree-line-length-none -g -O3 -march=native>)
+target_compile_options(cp2k_compression PRIVATE $<$<COMPILE_LANGUAGE:Fortran>:-ffree-form -ffree-line-length-none -g -march=native>)
 target_compile_definitions(cp2k_compression PRIVATE
         $<$<COMPILE_LANGUAGE:Fortran>:__SHORT_FILE__=\"__FILE__\">
         __DATA_DIR=""

@@ -4,48 +4,53 @@ using namespace benchmark;
 using namespace benchmark::internal;
 
 extern "C" {
-double cp2k_compression(State& state, int iterations, int width, int nv);
+double cp2k_compression(State &state, int iterations, int width, int blocks);
 
-double cp2k_decompression(State& state, int iterations, int width, int nv);
+double cp2k_decompression(State &state, int iterations, int width, int blocks);
 }
 
-template <class... Args>
-void BM_cp2k_compression(State& state, Args&&... args) {
-    auto args_tuple                        = std::make_tuple(std::move(args)...);
-    const int width                        = std::get<0>(args_tuple);
+template<class... Args>
+void BM_cp2k_compression(State &state, Args &&... args) {
+    auto args_tuple = std::make_tuple(std::move(args)...);
+    const int width = std::get<0>(args_tuple);
+    const int blocks = state.range(0);
     constexpr uint32_t internal_iterations = 1 << 10; // 1024
+    const int elements_per_block = 512 / width;
 
-    constexpr uint32_t nv = 1024;
-    for (auto _ : state) {
-        const double time = cp2k_compression(state, internal_iterations, width, nv);
+    for (auto _: state) {
+        const double time = cp2k_compression(state, internal_iterations, width, blocks);
         state.SetIterationTime(time);
     }
 
     const int64_t total_iterations = internal_iterations * state.iterations();
 
-    const double bytes_processed = nv * static_cast<double>(total_iterations) * (8 + (static_cast<float>(width) / 8));
+    const double bytes_processed = (blocks * elements_per_block) * static_cast<double>(total_iterations) * (
+                                       4 + (static_cast<float>(width) / 8));
 
     state.SetBytesProcessed(static_cast<int64_t>(bytes_processed));
     // state.counters["compressed_bytes_per_second"] = 0;
 }
 
-template <class... Args>
-void BM_cp2k_decompression(State& state, Args&&... args) {
-    auto args_tuple                        = std::make_tuple(std::move(args)...);
-    const int width                        = std::get<0>(args_tuple);
+template<class... Args>
+void BM_cp2k_decompression(State &state, Args &&... args) {
+    auto args_tuple = std::make_tuple(std::move(args)...);
+    const int width = std::get<0>(args_tuple);
+    const int blocks = state.range(0);
     constexpr uint32_t internal_iterations = 1 << 10; // 1024
+    const int elements_per_block = 512 / width;
 
-    constexpr uint32_t nv = 1024;
-    for (auto _ : state) {
-        const double time = cp2k_decompression(state, internal_iterations, width, nv);
+    for (auto _: state) {
+        const double time = cp2k_decompression(state, internal_iterations, width, blocks);
         state.SetIterationTime(time);
     }
 
     const int64_t total_iterations = internal_iterations * state.iterations();
 
-    const double bytes_processed = nv * static_cast<double>(total_iterations) * (8 + (static_cast<float>(width) / 8));
+    const double bytes_processed = (blocks * elements_per_block) * static_cast<double>(total_iterations) * (
+                                       4 + (static_cast<float>(width) / 8));
 
     state.SetBytesProcessed(static_cast<int64_t>(bytes_processed));
+    state.SetItemsProcessed(total_iterations * blocks * elements_per_block);
     // state.counters["compressed_bytes_per_second"] = 0;
 }
 

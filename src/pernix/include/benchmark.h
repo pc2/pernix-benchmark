@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdint>
 #include <functional>
+#include <iostream>
 #include <vector>
 #include <random>
 
@@ -143,21 +144,23 @@ __always_inline void BM_decompress_blocks(benchmark::State &state,
             }
         }
     } else {
+        // double sum = 0;
         for (auto _: state) {
             alignas(64) const uint8_t *block_input = benchmark_set->input_ptr;
             alignas(64) float_t *block_output = benchmark_set->output_ptr;
 
             for (uint32_t block = 0; block < number_of_blocks; block++) {
-                decompress_function(block_input + block * 64, benchmark_set->scales[block],
-                                    block_output + block * elements_per_block);
+                decompress_function(block_input, benchmark_set->scales[block], block_output);
                 benchmark::DoNotOptimize(block_input);
                 benchmark::DoNotOptimize(benchmark_set->scales.data());
                 benchmark::DoNotOptimize(block_output);
-                // block_input += 32;
-                // block_output += elements_per_block;
+                block_input += 64;
+                block_output += elements_per_block;
                 benchmark::ClobberMemory();
+                // sum += block_output[0];
             }
         }
+        // std::cout << sum << std::endl; // Prevent optimizing out the loop
     }
     const auto iters = static_cast<uint64_t>(state.iterations());
     const auto blocks = static_cast<uint64_t>(number_of_blocks);
@@ -194,21 +197,23 @@ __always_inline void BM_compress_blocks(benchmark::State &state,
             }
         }
     } else {
+        // uint64_t sum = 0;
         for (auto _: state) {
             alignas(64) const float_t *block_input = benchmark_set->input_ptr;
             alignas(64) uint8_t *block_output = benchmark_set->output_ptr;
 
             for (uint32_t block = 0; block < number_of_blocks; block++) {
-                compress_function(block_input + block * elements_per_block, benchmark_set->scales[block],
-                                  block_output + block * 64);
+                compress_function(block_input, benchmark_set->scales[block], block_output);
                 benchmark::DoNotOptimize(block_input);
                 benchmark::DoNotOptimize(benchmark_set->scales.data());
                 benchmark::DoNotOptimize(block_output);
-                // block_input += elements_per_block;
-                // block_output += 32;
+                block_input += elements_per_block;
+                block_output += 64;
                 benchmark::ClobberMemory();
+                // sum += block_output[0];
             }
         }
+        // std::cout << sum << std::endl; // Prevent optimizing out the loop
     }
     const auto iters = static_cast<uint64_t>(state.iterations());
     const auto blocks = static_cast<uint64_t>(number_of_blocks);
