@@ -25,7 +25,7 @@ void BM_cp2k_compression(State &state, Args &&... args) {
     const int64_t total_iterations = internal_iterations * state.iterations();
 
     const double bytes_processed = (blocks * elements_per_block) * static_cast<double>(total_iterations) * (
-                                       4 + (static_cast<float>(width) / 8));
+                                       8 + (static_cast<float>(width) / 8));
 
     state.SetBytesProcessed(static_cast<int64_t>(bytes_processed));
     // state.counters["compressed_bytes_per_second"] = 0;
@@ -47,7 +47,7 @@ void BM_cp2k_decompression(State &state, Args &&... args) {
     const int64_t total_iterations = internal_iterations * state.iterations();
 
     const double bytes_processed = (blocks * elements_per_block) * static_cast<double>(total_iterations) * (
-                                       4 + (static_cast<float>(width) / 8));
+                                       8 + (static_cast<float>(width) / 8));
 
     state.SetBytesProcessed(static_cast<int64_t>(bytes_processed));
     state.SetItemsProcessed(total_iterations * blocks * elements_per_block);

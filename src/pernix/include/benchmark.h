@@ -79,7 +79,7 @@ struct CompressionBenchmarkSet {
         std::random_device rd;
         std::mt19937 gen(rd());
         std::uniform_real_distribution<float_t> dis{};
-        std::uniform_real_distribution scale_dis(0.0001f, 1.0f);
+        std::uniform_real_distribution scale_dis(1.0f, 10000.0f);
 
         const size_t out_bytes = detail::round_up_to(64 * number_of_blocks, 64);
         const size_t in_bytes = detail::round_up_to(elements_per_block * number_of_blocks * sizeof(float_t), 64);
@@ -133,6 +133,7 @@ __always_inline void BM_decompress_blocks(benchmark::State &state,
     const size_t bytes_read_per_block = (elements_per_block * BIT_WIDTH + 7) / 8;
     const size_t bytes_written_per_block = elements_per_block * sizeof(float_t);
 
+    double sum = 0;
     if constexpr (DISABLE_MEM) {
         alignas(64) thread_local uint8_t dummy_input[64] = {0};
         alignas(64) thread_local float_t dummy_output[elements_per_block * 1] = {0};
@@ -140,11 +141,11 @@ __always_inline void BM_decompress_blocks(benchmark::State &state,
         for (auto _: state) {
             for (uint32_t block = 0; block < number_of_blocks; block++) {
                 decompress_function(dummy_input, benchmark_set->scales[block], dummy_output);
+                sum += dummy_output[0];
                 asm volatile("" ::"r"(dummy_input), "r"(dummy_output));
             }
         }
     } else {
-        // double sum = 0;
         for (auto _: state) {
             alignas(64) const uint8_t *block_input = benchmark_set->input_ptr;
             alignas(64) float_t *block_output = benchmark_set->output_ptr;
@@ -156,11 +157,10 @@ __always_inline void BM_decompress_blocks(benchmark::State &state,
                 benchmark::DoNotOptimize(block_output);
                 block_input += 64;
                 block_output += elements_per_block;
+                sum += block_output[0];
                 benchmark::ClobberMemory();
-                // sum += block_output[0];
             }
         }
-        // std::cout << sum << std::endl; // Prevent optimizing out the loop
     }
     const auto iters = static_cast<uint64_t>(state.iterations());
     const auto blocks = static_cast<uint64_t>(number_of_blocks);
@@ -170,6 +170,7 @@ __always_inline void BM_decompress_blocks(benchmark::State &state,
 
     const auto items = static_cast<int64_t>(iters * blocks * elements_per_block);
     state.SetItemsProcessed(items);
+    state.counters["sum"] = sum;
 
     delete benchmark_set;
 }
@@ -186,6 +187,7 @@ __always_inline void BM_compress_blocks(benchmark::State &state,
     const size_t bytes_read_per_block = elements_per_block * sizeof(float_t);
     const size_t bytes_written_per_block = (elements_per_block * BIT_WIDTH + 7) / 8;
 
+    uint64_t sum = 0;
     if constexpr (DISABLE_MEM) {
         alignas(64) thread_local float_t dummy_input[elements_per_block * 1] = {0};
         alignas(64) thread_local uint8_t dummy_output[64] = {0};
@@ -193,11 +195,11 @@ __always_inline void BM_compress_blocks(benchmark::State &state,
         for (auto _: state) {
             for (uint32_t block = 0; block < number_of_blocks; block++) {
                 compress_function(dummy_input, benchmark_set->scales[block], dummy_output);
+                sum += dummy_output[0];
                 asm volatile("" ::"r"(dummy_input), "r"(dummy_output));
             }
         }
     } else {
-        // uint64_t sum = 0;
         for (auto _: state) {
             alignas(64) const float_t *block_input = benchmark_set->input_ptr;
             alignas(64) uint8_t *block_output = benchmark_set->output_ptr;
@@ -209,11 +211,10 @@ __always_inline void BM_compress_blocks(benchmark::State &state,
                 benchmark::DoNotOptimize(block_output);
                 block_input += elements_per_block;
                 block_output += 64;
+                sum += block_output[0];
                 benchmark::ClobberMemory();
-                // sum += block_output[0];
             }
         }
-        // std::cout << sum << std::endl; // Prevent optimizing out the loop
     }
     const auto iters = static_cast<uint64_t>(state.iterations());
     const auto blocks = static_cast<uint64_t>(number_of_blocks);
@@ -223,6 +224,7 @@ __always_inline void BM_compress_blocks(benchmark::State &state,
 
     const auto items = static_cast<int64_t>(iters * blocks * elements_per_block);
     state.SetItemsProcessed(items);
+    state.counters["sum"] = sum;
 
     delete benchmark_set;
 }

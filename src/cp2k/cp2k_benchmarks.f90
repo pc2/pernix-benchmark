@@ -109,7 +109,6 @@ contains
         t_end = real(omp_get_wtime(), kind = c_double)
 
         call hfx_reset_cache_and_container(integral_caches(n_bits), integral_containers(n_bits), memory_usage_bytes, .false.)
-
         call dealloc_containers(compression_store, memory_usage_bytes)
 
         if (allocated(values_in))  deallocate(values_in)
