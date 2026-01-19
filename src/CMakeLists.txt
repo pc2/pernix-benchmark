@@ -19,7 +19,7 @@ function(add_pernix_benchmark variant compile_opts)
 
     add_executable(bench_pernix_${variant} main.cpp ${SOURCE_FILES})
     target_link_libraries(bench_pernix_${variant} PRIVATE ${BENCHMARK_LDFLAGS})
-    target_compile_options(bench_pernix_${variant} PRIVATE ${ARGN} ${BENCHMARK_CFLAGS})
+    target_compile_options(bench_pernix_${variant} PRIVATE ${compile_opts} ${ARGN} ${BENCHMARK_CFLAGS})
     target_include_directories(bench_pernix_${variant} PRIVATE ${CMAKE_SOURCE_DIR}/external/pernix/include)
     target_include_directories(bench_pernix_${variant} PRIVATE pernix/include)
 endfunction()
