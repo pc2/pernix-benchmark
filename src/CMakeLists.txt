@@ -8,39 +8,30 @@ file(GLOB_RECURSE
         cp2k/*.c
 )
 
-list(APPEND PERNIX_VARIANTS
-        fallback
-        avx2
-        bmi2
-        avx512vbmi
-)
-
 find_package(OpenMP)
-target_compile_options(libcompression PUBLIC -v -g -march=native)
-foreach (variant IN LISTS PERNIX_VARIANTS)
+function(add_pernix_benchmark variant compile_opts)
     file(GLOB_RECURSE
             SOURCE_FILES
             pernix/${variant}/*.cpp
+            ${CMAKE_SOURCE_DIR}/external/pernix/include/*.h
     )
+    message(STATUS ${SOURCE_FILES})
 
     add_executable(bench_pernix_${variant} main.cpp ${SOURCE_FILES})
-    # target_sources(bench_pernix_${variant} PRIVATE ${SOURCE_FILES})
-    target_link_libraries(bench_pernix_${variant} PRIVATE libcompression ${BENCHMARK_LDFLAGS})
-    target_compile_options(bench_pernix_${variant} PRIVATE ${BENCHMARK_CFLAGS})
-    if (OpenMP_CXX_FOUND)
-        target_link_libraries(bench_pernix_${variant} PUBLIC OpenMP::OpenMP_CXX)
-    endif ()
+    target_link_libraries(bench_pernix_${variant} PRIVATE ${BENCHMARK_LDFLAGS})
+    target_compile_options(bench_pernix_${variant} PRIVATE ${ARGN} ${BENCHMARK_CFLAGS})
+    target_include_directories(bench_pernix_${variant} PRIVATE ${CMAKE_SOURCE_DIR}/external/pernix/include)
     target_include_directories(bench_pernix_${variant} PRIVATE pernix/include)
-endforeach ()
-target_compile_options(bench_pernix_fallback PUBLIC -v -g -march=x86-64)
-target_compile_options(bench_pernix_avx2 PUBLIC -g -march=x86-64-v2)
-target_compile_options(bench_pernix_bmi2 PUBLIC -g -march=x86-64-v2)
-target_compile_options(bench_pernix_avx512vbmi PUBLIC -g -march=x86-64-v3 -mavx512vbmi)
+endfunction()
+add_pernix_benchmark(avx512vbmi -g -v -march=x86-64-v4 -mavx512vbmi)
+add_pernix_benchmark(avx2 -g -v -march=x86-64-v3)
+add_pernix_benchmark(bmi2 -g -v -march=x86-64-v3)
+add_pernix_benchmark(fallback -g -v -march=x86-64)
 
 # add_executable(bench_cp2k)
 add_executable(bench_cp2k main.cpp)
 target_sources(bench_cp2k PRIVATE ${CP2K_SOURCE_FILES})
-target_link_libraries(bench_cp2k PRIVATE libcompression ${BENCHMARK_LDFLAGS} cp2k_compression)
+target_link_libraries(bench_cp2k PRIVATE ${BENCHMARK_LDFLAGS} cp2k_compression)
 target_include_directories(bench_cp2k PRIVATE "${CMAKE_BINARY_DIR}/fortran_modules/cp2k")
 add_dependencies(bench_cp2k cp2k_compression)
 target_compile_options(bench_cp2k PRIVATE ${BENCHMARK_CFLAGS} -g -march=native)
