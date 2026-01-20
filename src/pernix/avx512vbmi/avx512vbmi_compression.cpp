@@ -1,8 +1,19 @@
 #include <benchmark.h>
 #include <libcompression.h>
 
+template<uint8_t BIT_WIDTH, bool DISABLE_MEM>
+class BenchmarkCompressorAVX512VBMI : public BenchmarkCompressor<BIT_WIDTH, DISABLE_MEM> {
+public:
+    int compress(const float_t *input, const float_t scale, uint8_t *output) override {
+        return libcompression::mm512_compress_block_avx512vbmi<BIT_WIDTH>(input, scale, output);
+    }
+};
+
 #define BENCHMARK_COMPRESS_BLOCKS_AVX512VBMI_FUNCTION(N, MEM) \
-    BENCHMARK_COMPRESS_BLOCKS_FUNCTION(compress_block_avx512vbmi, libcompression::mm512_compress_block_avx512vbmi, N, MEM);
+    static void BM_compress_avx512vbmi_##MEM##_##N(benchmark::State& state) { \
+        BM_compress_blocks<N, true, MEM, BenchmarkCompressorAVX512VBMI<N, MEM>>(state); \
+    }                                                              \
+BENCHMARK_COMPRESS_BLOCKS_REGISTER(compress_avx512vbmi_##MEM##_##N);
 
 BENCHMARK_COMPRESS_BLOCKS_AVX512VBMI_FUNCTION(8, true);
 BENCHMARK_COMPRESS_BLOCKS_AVX512VBMI_FUNCTION(9, true);

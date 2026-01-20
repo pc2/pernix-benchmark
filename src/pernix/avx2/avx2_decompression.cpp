@@ -1,8 +1,20 @@
 #include <benchmark.h>
 #include <libcompression.h>
 
+
+template<uint8_t BIT_WIDTH, bool DISABLE_MEM>
+class BenchmarkDecompressorAVX2 : public BenchmarkDecompressor<BIT_WIDTH, true, DISABLE_MEM> {
+public:
+    int decompress(const uint8_t *input, const float_t scale, float_t *output) override {
+        return libcompression::mm256_decompress_block_avx2<BIT_WIDTH>(input, scale, output);
+    }
+};
+
 #define BENCHMARK_DECOMPRESS_BLOCKS_AVX2_FUNCTION(N, MEM) \
-    BENCHMARK_DECOMPRESS_BLOCKS_FUNCTION(decompress_block_avx2, libcompression::mm256_decompress_block_avx2, N, MEM);
+static void BM_decompress_avx2_##MEM##_##N(benchmark::State& state) { \
+BM_decompress_blocks<N, true, MEM, BenchmarkDecompressorAVX2<N, MEM>>(state); \
+}                                                              \
+BENCHMARK_DECOMPRESS_BLOCKS_REGISTER(decompress_avx2_##MEM##_##N);
 
 BENCHMARK_DECOMPRESS_BLOCKS_AVX2_FUNCTION(8, true);
 BENCHMARK_DECOMPRESS_BLOCKS_AVX2_FUNCTION(9, true);

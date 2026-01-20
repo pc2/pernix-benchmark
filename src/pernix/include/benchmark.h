@@ -5,7 +5,6 @@
 
 #include <cmath>
 #include <cstdint>
-#include <functional>
 #include <iostream>
 #include <vector>
 #include <random>
@@ -100,34 +99,37 @@ struct CompressionBenchmarkSet {
     }
 };
 
+template<uint8_t BIT_WIDTH, bool SIGN_VALUES, bool DISABLE_MEM>
+class BenchmarkDecompressor {
+public:
+    virtual ~BenchmarkDecompressor() = default;
+
+    virtual int decompress(const uint8_t *, const float_t, float_t *) = 0;
+};
+
+template<uint8_t BIT_WIDTH, bool DISABLE_MEM>
+class BenchmarkCompressor {
+public:
+    virtual ~BenchmarkCompressor() = default;
+
+    virtual int compress(const float_t *, const float_t, uint8_t *) = 0;
+};
 
 #define BENCHMARK_DECOMPRESS_BLOCKS_REGISTER(name) \
     BENCHMARK(BM_##name)->RangeMultiplier(2)->Range(1 << 0, 1 << 22)
 
-#define BENCHMARK_DECOMPRESS_BLOCKS_FUNCTION(name, func, N, MEM)   \
-    static void BM_##name##_##MEM##_##N(benchmark::State& state) { \
-        BM_decompress_blocks<N, true, MEM>(state, func<N>);        \
-    }                                                              \
-    BENCHMARK_DECOMPRESS_BLOCKS_REGISTER(name##_##MEM##_##N);
-
-
 #define BENCHMARK_COMPRESS_BLOCKS_REGISTER(name) \
     BENCHMARK(BM_##name)->RangeMultiplier(2)->Range(1 << 0, 1 << 22)
 
-#define BENCHMARK_COMPRESS_BLOCKS_FUNCTION(name, func, N, MEM)      \
-    static void BM_##name##_##MEM##_##N(benchmark::State& state) {  \
-        BM_compress_blocks<N, true, MEM>(state, func<N>);           \
-    }                                                               \
-    BENCHMARK_COMPRESS_BLOCKS_REGISTER(name##_##MEM##_##N);
 
-
-template<uint8_t BIT_WIDTH, bool SIGN_VALUES, bool DISABLE_MEM>
+template<uint8_t BIT_WIDTH, bool SIGN_VALUES, bool DISABLE_MEM, typename Decompressor>
     requires(BIT_WIDTH >= 1 && BIT_WIDTH <= 24)
-__always_inline void BM_decompress_blocks(benchmark::State &state,
-                                          const std::function<int(const uint8_t *, float_t, float_t *)> &
-                                          decompress_function) {
+__always_inline void BM_decompress_blocks(benchmark::State &state) {
     const size_t elements_per_block = 512 / BIT_WIDTH;
     const auto number_of_blocks = static_cast<size_t>(state.range(0));
+    std::unique_ptr<BenchmarkDecompressor<BIT_WIDTH, SIGN_VALUES, DISABLE_MEM> > decompressor = std::make_unique<
+        Decompressor>();
+
     const auto benchmark_set = new DecompressionBenchmarkSet<BIT_WIDTH>(static_cast<int64_t>(number_of_blocks));
 
     const size_t bytes_read_per_block = (elements_per_block * BIT_WIDTH + 7) / 8;
@@ -145,7 +147,7 @@ __always_inline void BM_decompress_blocks(benchmark::State &state,
 
         for (auto _: state) {
             for (uint32_t block = 0; block < number_of_blocks; block++) {
-                decompress_function(dummy_input, benchmark_set->scales[block], dummy_output);
+                decompressor->decompress(dummy_input, benchmark_set->scales[block], dummy_output);
                 sum += dummy_output[0];
                 asm volatile("" ::"r"(dummy_input), "r"(dummy_output));
             }
@@ -156,7 +158,7 @@ __always_inline void BM_decompress_blocks(benchmark::State &state,
             alignas(64) float_t *block_output = benchmark_set->output_ptr;
 
             for (uint32_t block = 0; block < number_of_blocks; block++) {
-                decompress_function(block_input, benchmark_set->scales[block], block_output);
+                decompressor->decompress(block_input, benchmark_set->scales[block], block_output);
                 benchmark::DoNotOptimize(block_input);
                 benchmark::DoNotOptimize(benchmark_set->scales.data());
                 benchmark::DoNotOptimize(block_output);
@@ -184,13 +186,12 @@ __always_inline void BM_decompress_blocks(benchmark::State &state,
     delete benchmark_set;
 }
 
-template<uint8_t BIT_WIDTH, bool SIGN_VALUES, bool DISABLE_MEM>
+template<uint8_t BIT_WIDTH, bool SIGN_VALUES, bool DISABLE_MEM, typename Compressor>
     requires(BIT_WIDTH >= 1 && BIT_WIDTH <= 24)
-__always_inline void BM_compress_blocks(benchmark::State &state,
-                                        const std::function<int(const float_t *, float_t, uint8_t *)> &
-                                        compress_function) {
+__always_inline void BM_compress_blocks(benchmark::State &state) {
     const size_t elements_per_block = 512 / BIT_WIDTH;
     const auto number_of_blocks = static_cast<size_t>(state.range(0));
+    std::unique_ptr<BenchmarkCompressor<BIT_WIDTH, DISABLE_MEM> > compressor = std::make_unique<Compressor>();
     auto benchmark_set = new CompressionBenchmarkSet<BIT_WIDTH>(static_cast<int64_t>(number_of_blocks));
 
     const size_t bytes_read_per_block = elements_per_block * sizeof(float_t);
@@ -200,10 +201,11 @@ __always_inline void BM_compress_blocks(benchmark::State &state,
     if constexpr (DISABLE_MEM) {
         alignas(64) thread_local float_t dummy_input[elements_per_block * 1] = {0};
         alignas(64) thread_local uint8_t dummy_output[64] = {0};
+        thread_local float_t scale = 1.0f;
 
         for (auto _: state) {
             for (uint32_t block = 0; block < number_of_blocks; block++) {
-                compress_function(dummy_input, benchmark_set->scales[block], dummy_output);
+                compressor->compress(dummy_input, scale, dummy_output);
                 sum += dummy_output[0];
                 asm volatile("" ::"r"(dummy_input), "r"(dummy_output));
             }
@@ -214,7 +216,7 @@ __always_inline void BM_compress_blocks(benchmark::State &state,
             alignas(64) uint8_t *block_output = benchmark_set->output_ptr;
 
             for (uint32_t block = 0; block < number_of_blocks; block++) {
-                compress_function(block_input, benchmark_set->scales[block], block_output);
+                compressor->compress(block_input, benchmark_set->scales[block], block_output);
                 benchmark::DoNotOptimize(block_input);
                 benchmark::DoNotOptimize(benchmark_set->scales.data());
                 benchmark::DoNotOptimize(block_output);
@@ -225,20 +227,21 @@ __always_inline void BM_compress_blocks(benchmark::State &state,
             }
         }
     }
+
     const auto iters = static_cast<uint64_t>(state.iterations());
-    const auto blocks = static_cast<uint64_t>(number_of_blocks);
 
     if constexpr (DISABLE_MEM) {
-        state.SetBytesProcessed(static_cast<int64_t>(iters * blocks * bytes_written_per_block));
+        state.SetBytesProcessed(static_cast<int64_t>(iters * number_of_blocks * bytes_written_per_block));
     } else {
         state.SetBytesProcessed(
-            static_cast<int64_t>(iters * blocks * (bytes_read_per_block + bytes_written_per_block)));
+            static_cast<int64_t>(iters * number_of_blocks * (bytes_read_per_block + bytes_written_per_block)));
     }
 
-    state.SetItemsProcessed(static_cast<int64_t>(iters * blocks));
+    state.SetItemsProcessed(static_cast<int64_t>(iters * number_of_blocks));
     state.counters["sum"] = sum;
 
     delete benchmark_set;
 }
+
 
 #endif //LIBCOMPRESSION_BENCHMARK_H
