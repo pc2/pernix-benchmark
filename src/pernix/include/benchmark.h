@@ -135,8 +135,13 @@ __always_inline void BM_decompress_blocks(benchmark::State &state,
 
     double sum = 0;
     if constexpr (DISABLE_MEM) {
-        alignas(64) thread_local uint8_t dummy_input[64] = {0};
-        alignas(64) thread_local float_t dummy_output[elements_per_block * 1] = {0};
+        alignas(64) uint8_t dummy_input[64] = {
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+            17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32,
+            33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
+            49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64
+        };
+        alignas(64) float_t dummy_output[elements_per_block * 1] = {0};
 
         for (auto _: state) {
             for (uint32_t block = 0; block < number_of_blocks; block++) {
@@ -166,13 +171,13 @@ __always_inline void BM_decompress_blocks(benchmark::State &state,
     const auto blocks = static_cast<uint64_t>(number_of_blocks);
 
     if constexpr (DISABLE_MEM) {
-        state.SetBytesProcessed(static_cast<int64_t>(iters * blocks * bytes_written_per_block));
+        state.SetBytesProcessed(static_cast<int64_t>(iters * blocks * bytes_read_per_block));
     } else {
         state.SetBytesProcessed(
             static_cast<int64_t>(iters * blocks * (bytes_read_per_block + bytes_written_per_block)));
     }
 
-    const auto items = static_cast<int64_t>(iters * blocks * elements_per_block);
+    const auto items = static_cast<int64_t>(iters * blocks);
     state.SetItemsProcessed(items);
     state.counters["sum"] = sum;
 
@@ -224,14 +229,13 @@ __always_inline void BM_compress_blocks(benchmark::State &state,
     const auto blocks = static_cast<uint64_t>(number_of_blocks);
 
     if constexpr (DISABLE_MEM) {
-        state.SetBytesProcessed(static_cast<int64_t>(iters * blocks * bytes_read_per_block));
+        state.SetBytesProcessed(static_cast<int64_t>(iters * blocks * bytes_written_per_block));
     } else {
         state.SetBytesProcessed(
             static_cast<int64_t>(iters * blocks * (bytes_read_per_block + bytes_written_per_block)));
     }
 
-    const auto items = static_cast<int64_t>(iters * blocks * elements_per_block);
-    state.SetItemsProcessed(items);
+    state.SetItemsProcessed(static_cast<int64_t>(iters * blocks));
     state.counters["sum"] = sum;
 
     delete benchmark_set;
