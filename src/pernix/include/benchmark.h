@@ -165,8 +165,12 @@ __always_inline void BM_decompress_blocks(benchmark::State &state,
     const auto iters = static_cast<uint64_t>(state.iterations());
     const auto blocks = static_cast<uint64_t>(number_of_blocks);
 
-    const uint64_t bytes_per_block = bytes_read_per_block + bytes_written_per_block;
-    state.SetBytesProcessed(static_cast<int64_t>(iters * blocks * bytes_per_block));
+    if constexpr (DISABLE_MEM) {
+        state.SetBytesProcessed(static_cast<int64_t>(iters * blocks * bytes_written_per_block));
+    } else {
+        state.SetBytesProcessed(
+            static_cast<int64_t>(iters * blocks * (bytes_read_per_block + bytes_written_per_block)));
+    }
 
     const auto items = static_cast<int64_t>(iters * blocks * elements_per_block);
     state.SetItemsProcessed(items);
@@ -219,8 +223,12 @@ __always_inline void BM_compress_blocks(benchmark::State &state,
     const auto iters = static_cast<uint64_t>(state.iterations());
     const auto blocks = static_cast<uint64_t>(number_of_blocks);
 
-    const uint64_t bytes_per_block = bytes_read_per_block + bytes_written_per_block;
-    state.SetBytesProcessed(static_cast<int64_t>(iters * blocks * bytes_per_block));
+    if constexpr (DISABLE_MEM) {
+        state.SetBytesProcessed(static_cast<int64_t>(iters * blocks * bytes_read_per_block));
+    } else {
+        state.SetBytesProcessed(
+            static_cast<int64_t>(iters * blocks * (bytes_read_per_block + bytes_written_per_block)));
+    }
 
     const auto items = static_cast<int64_t>(iters * blocks * elements_per_block);
     state.SetItemsProcessed(items);
