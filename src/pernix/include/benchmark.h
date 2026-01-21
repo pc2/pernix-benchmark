@@ -104,7 +104,7 @@ class BenchmarkDecompressor {
 public:
     virtual ~BenchmarkDecompressor() = default;
 
-    virtual int decompress(const uint8_t *, const float_t, float_t *) = 0;
+    __always_inline virtual int decompress(const uint8_t *, const float_t, float_t *) = 0;
 };
 
 template<uint8_t BIT_WIDTH, bool DISABLE_MEM>
@@ -112,7 +112,7 @@ class BenchmarkCompressor {
 public:
     virtual ~BenchmarkCompressor() = default;
 
-    virtual int compress(const float_t *, const float_t, uint8_t *) = 0;
+    __always_inline virtual int compress(const float_t *, const float_t, uint8_t *) = 0;
 };
 
 #define BENCHMARK_DECOMPRESS_BLOCKS_REGISTER(name) \

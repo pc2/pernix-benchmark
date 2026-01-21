@@ -4,7 +4,7 @@
 template<uint8_t BIT_WIDTH, bool DISABLE_MEM>
 class BenchmarkCompressorAVX512VBMI : public BenchmarkCompressor<BIT_WIDTH, DISABLE_MEM> {
 public:
-    int compress(const float_t *input, const float_t scale, uint8_t *output) override {
+    __always_inline int compress(const float_t *input, const float_t scale, uint8_t *output) override {
         return libcompression::mm512_compress_block_avx512vbmi<BIT_WIDTH>(input, scale, output);
     }
 };
