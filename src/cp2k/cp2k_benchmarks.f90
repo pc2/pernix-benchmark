@@ -85,18 +85,15 @@ contains
 
         t_start = real(omp_get_wtime(), kind = c_double)
         do i = 1, n_iters
-            integral_caches(n_bits)%element_counter = 1
-            integral_containers(n_bits)%element_counter = 1
-            integral_containers(n_bits)%file_counter = 1
-            integral_containers(n_bits)%current => integral_containers(n_bits)%first
+            !            integral_caches(n_bits)%element_counter = 1
+            !            integral_containers(n_bits)%element_counter = 1
+            !            integral_containers(n_bits)%file_counter = 1
+            !            integral_containers(n_bits)%current => integral_containers(n_bits)%first
             do j = 1, blocks
                 call hfx_add_mult_cache_elements(values_in, elements_per_blocks, n_bits, &
                         integral_caches(n_bits), integral_containers(n_bits), &
                         eps_storage, p_max_entry, memory_usage_bytes, use_disk_storage)
             end do
-
-            call hfx_flush_last_cache(n_bits, integral_caches(n_bits), integral_containers(n_bits), memory_usage_bytes, .false.)
-            call hfx_reset_cache_and_container(integral_caches(n_bits), integral_containers(n_bits), memory_usage_bytes, .false.)
         end do
         t_end = real(omp_get_wtime(), kind = c_double)
 
