@@ -1,6 +1,6 @@
 [submodule "external/pernix"]
 	path = external/pernix
-	url = git@github.com:woobble/pernix.git
+	url = https://github.com/pc2/pernix/
 [submodule "external/cp2k"]
 	path = external/cp2k
 	url = https://github.com/cp2k/cp2k/
