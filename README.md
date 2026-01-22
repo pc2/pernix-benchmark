@@ -27,12 +27,12 @@ Options:
 * AVX2+BMI2: `bash scripts/runBenchmarks.sh --target pernix_bmi2  --release-type Release`
 
 # Meaning of Benchmark Identifiers
-`BM_[direction]_[target]_[memory flag]_[bit width]/[]`
+`BM_[direction]_[target]_[core-throughput flag]_[bit width]/[number of blocks per iteration]`
 * direction: compress, decompress
 * target (instruction set): pernix_fallback, pernix_avx2, pernix_bmi2, pernix_avx512vbmi, cp2k
-* core-throughput flag: true= no loads and stores (core-troughput scenario), false=including loads and stores (full troughput scenario)
+* core-throughput flag: true= no loads and stores (core-throughput scenario), false=including loads and stores (full throughput scenario)
 * bit width: width of compressed numbers
-* number of block per iteration: number of 512-bit blocks processed per iteration
+* number of blocks per iteration: number of 512-bit blocks processed per iteration
 # Example Output (AMD Ryzen 7 9700X, GCC 15.2.0):
 * bash scripts/runBenchmarks.sh --target pernix_avx512vbmi --release-type Release
 ```
