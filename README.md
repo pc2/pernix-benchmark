@@ -1,5 +1,5 @@
 # Overview
-This repository provides a benchamrk framewaork based on google benchmark (https://github.com/google/benchmark?) for PERNIX (https://github.com/pc2/pernix).
+This repository provides a benchamrk framewaork based on google benchmark (https://github.com/google/benchmark) for PERNIX (https://github.com/pc2/pernix).
 
 # Installation
 1. install google benchmark https://github.com/google/benchmark?tab=readme-ov-file#installation
