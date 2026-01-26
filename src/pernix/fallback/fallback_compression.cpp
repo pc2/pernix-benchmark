@@ -1,11 +1,11 @@
 #include <benchmark.h>
-#include <libcompression.h>
+#include <pernix/pernix.h>
 
 template<uint8_t BIT_WIDTH, bool DISABLE_MEM>
 class BenchmarkCompressorFALLBACK : public BenchmarkCompressor<BIT_WIDTH, DISABLE_MEM> {
 public:
     int compress(const float_t *input, const float_t scale, uint8_t *output) override {
-        return libcompression::compress_block_fallback<BIT_WIDTH>(input, scale, output);
+        return pernix::compress_block_fallback<BIT_WIDTH>(input, scale, output);
     }
 };
 

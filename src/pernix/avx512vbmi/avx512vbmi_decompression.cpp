@@ -1,12 +1,12 @@
 #include <benchmark.h>
-#include <libcompression.h>
+#include <pernix/pernix.h>
 
 
 template<uint8_t BIT_WIDTH, bool DISABLE_MEM>
 class BenchmarkDecompressorAVX512VBMI : public BenchmarkDecompressor<BIT_WIDTH, true, DISABLE_MEM> {
 public:
     __always_inline int decompress(const uint8_t *input, const float_t scale, float_t *output) override {
-        return libcompression::mm512_decompress_block_avx512vbmi<BIT_WIDTH>(input, scale, output);
+        return pernix::mm512_decompress_block_avx512vbmi<BIT_WIDTH>(input, scale, output);
     }
 };
 
