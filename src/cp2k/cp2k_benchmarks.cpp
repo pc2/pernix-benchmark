@@ -14,7 +14,7 @@ void BM_cp2k_compression(State &state, Args &&... args) {
     auto args_tuple = std::make_tuple(std::move(args)...);
     const int width = std::get<0>(args_tuple);
     const int blocks = state.range(0);
-    constexpr uint32_t internal_iterations = 1 << 10; // 1024
+    constexpr uint32_t internal_iterations = 1 << 4; // 16
     const int elements_per_block = 512 / width;
 
     for (auto _: state) {
@@ -29,7 +29,6 @@ void BM_cp2k_compression(State &state, Args &&... args) {
 
     state.SetItemsProcessed(total_iterations * blocks);
     state.SetBytesProcessed(static_cast<int64_t>(bytes_processed));
-    // state.counters["compressed_bytes_per_second"] = 0;
 }
 
 template<class... Args>
@@ -52,11 +51,7 @@ void BM_cp2k_decompression(State &state, Args &&... args) {
 
     state.SetItemsProcessed(total_iterations * blocks);
     state.SetBytesProcessed(static_cast<int64_t>(bytes_processed));
-    // state.counters["compressed_bytes_per_second"] = 0;
 }
-
-// BENCHMARK(BM_cp2k_compression);
-// BENCHMARK(BM_cp2k_decompression);
 
 BENCHMARK_CAPTURE(BM_cp2k_compression, width8, 8)->RangeMultiplier(2)->Range(1 << 0, 1 << 22)->UseManualTime();
 BENCHMARK_CAPTURE(BM_cp2k_decompression, width8, 8)->RangeMultiplier(2)->Range(1 << 0, 1 << 22)->UseManualTime();
