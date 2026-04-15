@@ -2,7 +2,7 @@
 
 #SBATCH -J "Pernix and CP2K Number De/Compression Benchmarks"
 #SBATCH -A hpc-prf-ecderi
-#SBATCH -t 05:00:00
+#SBATCH -t 08:00:00
 #SBATCH -N 1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=16
