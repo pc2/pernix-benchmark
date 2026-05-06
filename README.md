@@ -1,6 +1,18 @@
 # Overview
 This repository provides a benchamrk framewaork based on google benchmark (https://github.com/google/benchmark) for PERNIX (https://github.com/pc2/pernix).
 
+# Licensing
+The original benchmark framework code is MIT-licensed under `LICENSE`.
+
+This repository also contains a CP2K submodule under `external/cp2k`. CP2K is GPL-2.0-or-later.
+The `cp2k_compression` static library is built from selected CP2K source files, and `bench_cp2k`
+links against that library. Those CP2K-derived targets, the CP2K patch files under
+`external/cp2k-patches/`, and benchmark executables linked with `cp2k_compression` must be treated
+as GPL-2.0-or-later.
+
+See `LICENSES.md` for the repository's intended license boundary. This documentation is not legal
+advice.
+
 # Installation
 1. install google benchmark https://github.com/google/benchmark?tab=readme-ov-file#installation
 2. clone repo: `git clone --recursive https://github.com/pc2/pernix-benchmark`

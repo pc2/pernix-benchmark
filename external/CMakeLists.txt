@@ -1,7 +1,10 @@
 #add_subdirectory(/home/woobb/Projects/libcompression libcompression)
 # add_subdirectory(pernix)
 
-# apply patch to CP2K source files to build a static library for compression methods
+# CP2K is GPL-2.0-or-later. This target compiles selected CP2K source files into a
+# static library, so cp2k_compression and executables linked against it are treated
+# as GPL-2.0-or-later. See ../LICENSES.md.
+# Apply a repository patch to CP2K source files before building the compression methods.
 
 find_package(Git REQUIRED)
 find_package(OpenMP)
