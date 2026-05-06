@@ -54,6 +54,7 @@ endif ()
 
 set(CP2K_SOURCE_FILES
         cp2k/src/base/machine_cpuid.c
+        cp2k/src/common/cp_data_dir.c
 
         cp2k/src/base/kinds.F
         cp2k/src/hfx_types.F
