@@ -2,6 +2,7 @@
 #define LIBCOMPRESSION_BENCHMARK_H
 
 #include <benchmark/benchmark.h>
+#include <pernix/simd_compat.h>
 
 #include <cmath>
 #include <cstdlib>

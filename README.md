@@ -17,6 +17,7 @@ Options:
   -o, --output PATH           Specify output archive path (default: benchmark_results.tar.gz)
   -s, --slurm                 Run benchmarks using SLURM job scheduler
   -m, --modules               Load required modules for PC2 environment
+      --simde                 Build and run Pernix benchmark targets with SIMDe
       --pin                   Pin benchmark to a specific CPU core
       --clean                 Clean build directory before building
   -h, --help                  Show this help message and exit
@@ -25,6 +26,7 @@ Options:
 # Examples:
 * AVX512-VMBI (e.g. AMD Zen 5): `bash scripts/runBenchmarks.sh --target pernix_avx512vbmi  --release-type Release`
 * AVX2+BMI2: `bash scripts/runBenchmarks.sh --target pernix_bmi2  --release-type Release`
+* SIMDe AVX512-VBMI: `bash scripts/runBenchmarks.sh --target pernix_avx512vbmi --release-type Release --simde`
 
 # Meaning of Benchmark Identifiers
 `BM_[direction]_[target]_[core-throughput flag]_[bit width]/[number of blocks per iteration]`
@@ -65,4 +67,3 @@ BM_compress_avx512vbmi_true_8/4194304        3872130 ns      3849850 ns         
 BM_compress_avx512vbmi_true_9/1                 7.55 ns         7.49 ns     92748076 bytes_per_second=7.82876Gi/s items_per_second=133.43M/s sum=0
 BM_compress_avx512vbmi_true_9/2                 15.0 ns         14.9 ns     46971995 bytes_per_second=7.86999Gi/s items_per_second=134.132M/s sum=0
 ```
-

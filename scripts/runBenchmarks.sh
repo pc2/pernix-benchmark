@@ -31,8 +31,9 @@ Options:
   -o, --output PATH           Specify output archive path (default: benchmark_results.tar.gz)
   -s, --slurm                 Run benchmarks using SLURM job scheduler
   -m, --modules               Load required modules for PC2 environment
+      --simde                 Build and run Pernix benchmark targets with SIMDe
       --pin                   Pin benchmark to a specific CPU core
-      --clean                 Clean build directory before building
+      --clean                 Delete the selected build directory and .venv before building
   -h, --help                  Show this help message and exit
 USAGE
 }
@@ -68,33 +69,23 @@ validate_targets() {
   done
 }
 
-patch_cp2k() {
-  local cp2k_source_dir="external/cp2k"
-  local patch_file="external/cp2k-patches/0001-Delete-unneeded-types-hfx_types.F.patch"
-  local patch_abs
-  patch_abs="$(cd "$(dirname "$patch_file")" && pwd -P)/$(basename "$patch_file")"
+parse_target_list() {
+  local value="$1"
+  local oldIFS="$IFS"
+  IFS=','
+  read -r -a TARGETS <<< "$value"
+  IFS="$oldIFS"
+  validate_targets "${TARGETS[@]}"
+}
 
-  echo "Patching CP2K source code..."
-
-  if [ ! -d "$cp2k_source_dir" ]; then
-    echo "CP2K source directory not found at $cp2k_source_dir"
-    exit 1
-  fi
-
-  if [ ! -f "$patch_file" ]; then
-    echo "Patch file not found at $patch_file"
-    exit 1
-  fi
-
-  pushd "$cp2k_source_dir" > /dev/null || { echo "Failed to enter CP2K source directory"; exit 1; }
-  git checkout support/v2025.2 || { echo "Failed to checkout CP2K support/v2025.2 branch"; popd > /dev/null || exit; exit 1; }
-  if git apply --check "$patch_abs" 2>/dev/null; then
-    git apply "$patch_abs" || { echo "Failed to apply patch $patch_file"; popd > /dev/null || exit; exit 1; }
-    echo "Applied patch $patch_file successfully."
+get_cpu_count() {
+  if command -v nproc &> /dev/null; then
+    nproc
+  elif command -v sysctl &> /dev/null; then
+    sysctl -n hw.ncpu
   else
-    echo "Patch $patch_file has already been applied or cannot be applied cleanly."
+    echo 1
   fi
-  popd > /dev/null || { echo "Failed to return to previous directory"; exit 1; }
 }
 
 build_benchmarks() {
@@ -102,11 +93,17 @@ build_benchmarks() {
   local release_type="$2"
   local -a targets=("${!3}")
   local slurm_execution="$4"
+  local use_simde="$5"
   local cmake_args=()
   local -a build_targets=()
 
   cmake_args+=("-DCMAKE_CXX_COMPILER=$compiler")
   cmake_args+=("-DCMAKE_BUILD_TYPE=$release_type")
+  if [ "$use_simde" -eq 1 ]; then
+    cmake_args+=("-DPERNIX_BENCHMARK_USE_SIMDE=ON")
+  else
+    cmake_args+=("-DPERNIX_BENCHMARK_USE_SIMDE=OFF")
+  fi
 
   for t in "${targets[@]}"; do
     build_targets+=("bench_$t")
@@ -118,13 +115,14 @@ build_benchmarks() {
 
   echo "Building benchmarks..."
 
-  cmake --build . -- -j"$(nproc)" "${build_targets[@]}" || { echo "Build failed"; exit 1; }
+  cmake --build . --target "${build_targets[@]}" --parallel "$(get_cpu_count)" || { echo "Build failed"; exit 1; }
 }
 
 run_benchmarks() {
   local -a targets=("${!1}")
   local slurm_execution="$2"
   local output_dir="$3"
+  local use_simde="$4"
 
   for t in "${targets[@]}"; do
     local benchmark_executable="src/bench_$t"
@@ -133,7 +131,11 @@ run_benchmarks() {
       exit 1
     fi
 
-    local output_file="${output_dir}/benchmark_${t}_results.json"
+    local output_target="$t"
+    if [ "$use_simde" -eq 1 ] && [[ "$t" == pernix_* ]]; then
+      output_target="${t}_simde"
+    fi
+    local output_file="${output_dir}/benchmark_${output_target}_results.json"
 
     echo "Running benchmark target: $t"
     if [ "$slurm_execution" -eq 1 ]; then
@@ -196,40 +198,75 @@ collect_machine_information() {
   fi
 }
 
-PARSED=$(getopt -o c:t:o:shm -l compiler:,target:,list-targets,release-type:,output:,slurm,modules,pin:,help,clean -n runBenchmarks.sh -- "$@") || { echo "Invalid options"; exit 2; }
-eval set -- "$PARSED"
 COMPILER="g++"
 RELEASE_TYPE="RELEASE"
 TARGETS=("${AVAILABLE_TARGETS[@]}")
 FINAL_OUTPUT="benchmark_results.tar.gz"
 INSTALL_PC2_MODULES=0
 SLURM_EXECUTION=0
+USE_SIMDE=0
 PIN=""
 CLEAN_BUILD=0
 if [ -n "$SLURM_JOB_ID" ]; then
   SLURM_EXECUTION=1
   echo "Detected SLURM environment. SLURM execution mode enabled."
 fi
-while true; do
+
+while [ "$#" -gt 0 ]; do
   case "$1" in
-    -c|--compiler) COMPILER="$2"; shift 2 ;;
+    -c|--compiler)
+      if [ "$#" -lt 2 ]; then echo "$1 requires an argument"; exit 2; fi
+      COMPILER="$2"
+      shift 2
+      ;;
+    --compiler=*)
+      COMPILER="${1#*=}"
+      shift
+      ;;
     -t|--target)
-      oldIFS="$IFS"
-      IFS=','
-      read -r -a TARGETS <<< "$2"
-      IFS="$oldIFS"
-      validate_targets "${TARGETS[@]}"
-      shift 2 ;;
-    --release-type) RELEASE_TYPE="$2"; shift 2 ;;
-    -o|--output) FINAL_OUTPUT="$2"; shift 2 ;;
+      if [ "$#" -lt 2 ]; then echo "$1 requires an argument"; exit 2; fi
+      parse_target_list "$2"
+      shift 2
+      ;;
+    --target=*)
+      parse_target_list "${1#*=}"
+      shift
+      ;;
+    --release-type)
+      if [ "$#" -lt 2 ]; then echo "$1 requires an argument"; exit 2; fi
+      RELEASE_TYPE="$2"
+      shift 2
+      ;;
+    --release-type=*)
+      RELEASE_TYPE="${1#*=}"
+      shift
+      ;;
+    -o|--output)
+      if [ "$#" -lt 2 ]; then echo "$1 requires an argument"; exit 2; fi
+      FINAL_OUTPUT="$2"
+      shift 2
+      ;;
+    --output=*)
+      FINAL_OUTPUT="${1#*=}"
+      shift
+      ;;
     --list-targets) print_available_targets; exit 0 ;;
     -s|--slurm) SLURM_EXECUTION=1; shift ;;
     -m|--modules) INSTALL_PC2_MODULES=1; shift ;;
-    --pin) PIN="$2"; shift 2 ;;
+    --simde) USE_SIMDE=1; shift ;;
+    --pin)
+      if [ "$#" -lt 2 ]; then echo "$1 requires an argument"; exit 2; fi
+      PIN="$2"
+      shift 2
+      ;;
+    --pin=*)
+      PIN="${1#*=}"
+      shift
+      ;;
     --clean) CLEAN_BUILD=1; shift ;;
     -h|--help) print_help; exit 0 ;;
     --) shift; break ;;
-    *) echo "Internal error while parsing options"; exit 3 ;;
+    *) echo "Unknown option: $1"; print_help; exit 2 ;;
   esac
 done
 
@@ -253,17 +290,13 @@ else
   echo "Running in local execution mode."
 fi
 
-# Check for required tools: cmake, make, and the specified compiler
+# Check for required tools: cmake and the specified compiler
 if ! command -v cmake &> /dev/null; then
   echo "cmake could not be found, please install it."
   exit 1
 fi
 if ! command -v "$COMPILER" &> /dev/null; then
   echo "$COMPILER could not be found, please install it."
-  exit 1
-fi
-if ! command -v make &> /dev/null; then
-  echo "make could not be found, please install it."
   exit 1
 fi
 
@@ -291,26 +324,30 @@ if [ -n "$FINAL_OUTPUT" ]; then
   echo "  Final Output: $FINAL_OUTPUT"
 fi
 echo "  SLURM Execution: $SLURM_EXECUTION"
-
-setup_python_environment
-collect_machine_information "$WORK_DIR"
-
-patch_cp2k
+echo "  SIMDe: $USE_SIMDE"
+echo "  Clean: $CLEAN_BUILD"
 
 BUILD_DIR="build/benchmarks_${COMPILER}"
 if [ -n "$RELEASE_TYPE" ]; then
   BUILD_DIR="${BUILD_DIR}_${RELEASE_TYPE}"
 fi
+if [ "$USE_SIMDE" -eq 1 ]; then
+  BUILD_DIR="${BUILD_DIR}_simde"
+fi
+
+if [ "$CLEAN_BUILD" -eq 1 ]; then
+  echo "Cleaning build directory and Python virtual environment..."
+  rm -rf "$BUILD_DIR" .venv
+fi
+
+setup_python_environment
+collect_machine_information "$WORK_DIR"
+
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR" || { echo "Failed to enter build directory"; exit 1; }
 
-#if [ "$CLEAN_BUILD" -eq 1 ]; then
-#  echo "Cleaning build directory..."
-#  rm -rf "$BUILD_DIR"
-#fi
-
-build_benchmarks "$COMPILER" "$RELEASE_TYPE" TARGETS[@] "$SLURM_EXECUTION"
-run_benchmarks TARGETS[@] "$SLURM_EXECUTION" "$WORK_DIR"
+build_benchmarks "$COMPILER" "$RELEASE_TYPE" TARGETS[@] "$SLURM_EXECUTION" "$USE_SIMDE"
+run_benchmarks TARGETS[@] "$SLURM_EXECUTION" "$WORK_DIR" "$USE_SIMDE"
 
 if [ -n "$FINAL_OUTPUT" ]; then
   echo "Archiving results..."
