@@ -19,9 +19,11 @@ constexpr double daxpy_alpha = 2.0;
 struct BenchmarkConfig {
     size_t bytes;
     size_t iterations;
+    size_t repetitions;
     size_t warmup_iterations;
     uint64_t seed;
     int32_t cpu_id; // if negative, do not set affinity
+    bool randomize_kernel_order;
 };
 
 struct BenchmarkContext {
