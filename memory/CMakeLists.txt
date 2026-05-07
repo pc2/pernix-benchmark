@@ -14,6 +14,14 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(cli11_proj)
 
+FetchContent_Declare(
+        nlohmann_json_proj
+        QUIET
+        GIT_REPOSITORY https://github.com/nlohmann/json.git
+        GIT_TAG v3.12.0
+)
+FetchContent_MakeAvailable(nlohmann_json_proj)
+
 set(MEMBENCH_SOURCES
         src/main.cpp
         src/benchmark.cpp
@@ -143,3 +151,4 @@ if (MEMBENCH_NATIVE_FLAG)
 endif ()
 target_link_libraries(membench PRIVATE Threads::Threads)
 target_link_libraries(membench PRIVATE CLI11::CLI11)
+target_link_libraries(membench PRIVATE nlohmann_json::nlohmann_json)

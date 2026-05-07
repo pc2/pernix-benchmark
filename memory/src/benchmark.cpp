@@ -11,17 +11,10 @@
 #include <numeric>
 #include <random>
 #include <string_view>
+#include <utility>
 
 namespace membench {
 namespace {
-
-struct SampleStats {
-    double min{};
-    double median{};
-    double mean{};
-    double stdev{};
-    double p95{};
-};
 
 struct ScaledUnit {
     double scale{};
@@ -47,7 +40,7 @@ ScaledUnit choose_bandwidth_unit(const double bytes_per_second) {
     return {scale, units[unit_index]};
 }
 
-SampleStats compute_stats(std::vector<double> samples) {
+BenchmarkStats compute_stats(std::vector<double> samples) {
     std::sort(samples.begin(), samples.end());
 
     const double sum = std::accumulate(samples.begin(), samples.end(), 0.0);
@@ -79,7 +72,7 @@ SampleStats compute_stats(std::vector<double> samples) {
     };
 }
 
-void print_stats(const std::string_view label, const SampleStats& stats, const std::string_view unit) {
+void print_stats(const std::string_view label, const BenchmarkStats& stats, const std::string_view unit) {
     std::cout << "  " << label << " min: " << stats.min << ' ' << unit << "\n";
     std::cout << "  " << label << " median: " << stats.median << ' ' << unit << "\n";
     std::cout << "  " << label << " mean: " << stats.mean << ' ' << unit << "\n";
@@ -87,7 +80,7 @@ void print_stats(const std::string_view label, const SampleStats& stats, const s
     std::cout << "  " << label << " p95: " << stats.p95 << ' ' << unit << "\n";
 }
 
-void print_scaled_stats(const std::string_view label, const SampleStats& stats, const ScaledUnit unit) {
+void print_scaled_stats(const std::string_view label, const BenchmarkStats& stats, const ScaledUnit unit) {
     std::cout << "  " << label << " min: " << (stats.min / unit.scale) << ' ' << unit.unit << "\n";
     std::cout << "  " << label << " median: " << (stats.median / unit.scale) << ' ' << unit.unit << "\n";
     std::cout << "  " << label << " mean: " << (stats.mean / unit.scale) << ' ' << unit.unit << "\n";
@@ -135,32 +128,32 @@ const Kernel* BenchmarkRegistry::find_kernel(const std::string& name) const noex
     return nullptr;
 }
 
-void BenchmarkRegistry::run_kernel(const std::string& name, BenchmarkContext& ctx) const {
+std::optional<BenchmarkResult> BenchmarkRegistry::run_kernel(const std::string& name, BenchmarkContext& ctx) const {
     const Kernel* k = this->find_kernel(name);
     if (!k) {
         std::cerr << "Kernel not found: " << name << "\n";
-        return;
+        return std::nullopt;
     }
 
-    run_kernel(*k, ctx);
+    return run_kernel(*k, ctx);
 }
 
-void BenchmarkRegistry::run_kernel(const Kernel& kernel, BenchmarkContext& ctx) const {
+std::optional<BenchmarkResult> BenchmarkRegistry::run_kernel(const Kernel& kernel, BenchmarkContext& ctx) const {
     const BenchmarkConfig& config = ctx.config;
     const size_t elements = ctx.src1.size();
     if (config.iterations == 0) {
         std::cerr << "Kernel needs at least one measured iteration: " << kernel.name << "\n";
-        return;
+        return std::nullopt;
     }
     if (config.repetitions == 0) {
         std::cerr << "Kernel needs at least one measured repetition: " << kernel.name << "\n";
-        return;
+        return std::nullopt;
     }
 
     const size_t configured_elements = config.bytes / sizeof(double);
     if (configured_elements != elements) {
         std::cerr << "BenchmarkConfig bytes do not match context size for kernel: " << kernel.name << "\n";
-        return;
+        return std::nullopt;
     }
 
     if (config.cpu_id >= 0 && config.cpu_id < get_cpu_count()) {
@@ -200,15 +193,17 @@ void BenchmarkRegistry::run_kernel(const Kernel& kernel, BenchmarkContext& ctx) 
         const double seconds = duration.count();
         if (seconds <= 0.0) {
             std::cerr << "Kernel measured non-positive time\n";
-            return;
+            return std::nullopt;
         }
         timing_samples.push_back(seconds);
     }
 
+    bool validation_passed = true;
     const KernelValidationFn validator = this->find_validator(kernel.kind);
     if (validator != nullptr) {
         if (!validator(ctx)) {
             std::cerr << "Validation failed for kernel: " << kernel.name << "\n";
+            validation_passed = false;
         }
     }
 
@@ -225,9 +220,9 @@ void BenchmarkRegistry::run_kernel(const Kernel& kernel, BenchmarkContext& ctx) 
         bandwidth_samples.push_back(bytes / seconds);
     }
 
-    const SampleStats time_stats = compute_stats(timing_samples);
-    const SampleStats time_per_iteration_stats = compute_stats(time_per_iteration_samples);
-    const SampleStats bandwidth_stats = compute_stats(bandwidth_samples);
+    const BenchmarkStats time_stats = compute_stats(timing_samples);
+    const BenchmarkStats time_per_iteration_stats = compute_stats(time_per_iteration_samples);
+    const BenchmarkStats bandwidth_stats = compute_stats(bandwidth_samples);
     const ScaledUnit bandwidth_unit = choose_bandwidth_unit(bandwidth_stats.mean);
 
     // Print a simple result summary
@@ -244,9 +239,24 @@ void BenchmarkRegistry::run_kernel(const Kernel& kernel, BenchmarkContext& ctx) 
     if (config.cpu_id >= 0) {
         reset_cpu_affinity();
     }
+
+    return BenchmarkResult{
+        kernel.name,
+        elements,
+        kernel.bytes_per_element,
+        timing_samples,
+        time_per_iteration_samples,
+        bandwidth_samples,
+        time_stats,
+        time_per_iteration_stats,
+        bandwidth_stats,
+        std::string(bandwidth_unit.unit),
+        bandwidth_unit.scale,
+        validation_passed,
+    };
 }
 
-void BenchmarkRegistry::run_all(BenchmarkContext& ctx) const {
+std::vector<BenchmarkResult> BenchmarkRegistry::run_all(BenchmarkContext& ctx) const {
     std::vector<const Kernel*> kernels;
     kernels.reserve(kernels_.size());
     for (const Kernel& kernel : kernels_) {
@@ -258,9 +268,14 @@ void BenchmarkRegistry::run_all(BenchmarkContext& ctx) const {
         std::shuffle(kernels.begin(), kernels.end(), rng);
     }
 
+    std::vector<BenchmarkResult> results;
+    results.reserve(kernels.size());
     for (const Kernel* kernel : kernels) {
-        run_kernel(*kernel, ctx);
+        if (std::optional<BenchmarkResult> result = run_kernel(*kernel, ctx)) {
+            results.push_back(std::move(*result));
+        }
     }
+    return results;
 }
 
 } // namespace membench

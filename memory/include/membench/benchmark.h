@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <limits>
+#include <optional>
 #include <random>
 #include <string>
 #include <unordered_map>
@@ -78,6 +79,29 @@ struct Kernel {
     KernelFn kernel{};
 };
 
+struct BenchmarkStats {
+    double min{};
+    double median{};
+    double mean{};
+    double stdev{};
+    double p95{};
+};
+
+struct BenchmarkResult {
+    std::string kernel;
+    size_t elements{};
+    size_t bytes_per_element{};
+    std::vector<double> time_seconds_samples;
+    std::vector<double> time_per_iteration_seconds_samples;
+    std::vector<double> bandwidth_bytes_per_second_samples;
+    BenchmarkStats time_seconds;
+    BenchmarkStats time_per_iteration_seconds;
+    BenchmarkStats bandwidth_bytes_per_second;
+    std::string bandwidth_unit;
+    double bandwidth_unit_scale{};
+    bool validation_passed{};
+};
+
 class BenchmarkRegistry {
 public:
     void add_kernel(const Kernel& kernel);
@@ -88,11 +112,11 @@ public:
 
     [[nodiscard]] const Kernel* find_kernel(const std::string& name) const noexcept;
 
-    void run_kernel(const std::string& name, BenchmarkContext& ctx) const;
+    [[nodiscard]] std::optional<BenchmarkResult> run_kernel(const std::string& name, BenchmarkContext& ctx) const;
 
-    void run_kernel(const Kernel& kernel, BenchmarkContext& ctx) const;
+    [[nodiscard]] std::optional<BenchmarkResult> run_kernel(const Kernel& kernel, BenchmarkContext& ctx) const;
 
-    void run_all(BenchmarkContext& ctx) const;
+    [[nodiscard]] std::vector<BenchmarkResult> run_all(BenchmarkContext& ctx) const;
 private:
     std::vector<Kernel> kernels_;
     std::unordered_map<KernelKind, KernelValidationFn> validators_;
