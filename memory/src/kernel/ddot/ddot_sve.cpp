@@ -12,18 +12,28 @@ static void ddot_sve_kernel(BenchmarkContext& ctx, size_t elements) {
     const double* src = ctx.src1.data();
     const double* src2 = ctx.src2.data();
     svfloat64_t acc = svdup_f64(0.0);
+    const size_t vl = svcntd();
+    const svbool_t pg_full = svptrue_b64();
+
+    size_t i = 0;
 
 #if defined(__clang__)
 #pragma clang loop vectorize(disable) interleave(disable)
 #endif
-    for (size_t i = 0; i < elements; i += svcntd()) {
+    for (; i + vl <= elements; i += vl) {
+        const svfloat64_t x = svld1_f64(pg_full, &src[i]);
+        const svfloat64_t y = svld1_f64(pg_full, &src2[i]);
+        acc = svmla_f64_x(pg_full, acc, x, y);
+    }
+
+    if (i < elements) {
         const svbool_t pg = svwhilelt_b64(i, elements);
         const svfloat64_t x = svld1_f64(pg, &src[i]);
         const svfloat64_t y = svld1_f64(pg, &src2[i]);
-        acc = svmla_f64_x(pg, acc, x, y);
+        acc = svmla_f64_m(pg, acc, x, y);
     }
 
-    const double sum = svaddv_f64(svptrue_b64(), acc);
+    const double sum = svaddv_f64(pg_full, acc);
     do_not_optimize(sum);
     ctx.result = sum;
 }

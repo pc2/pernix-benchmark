@@ -11,17 +11,26 @@ __attribute__((optimize("no-tree-vectorize")))
 static void load_sve_kernel(BenchmarkContext& ctx, size_t elements) {
     const double* src = ctx.src1.data();
     svfloat64_t acc = svdup_f64(0.0);
+    const size_t vl = svcntd();
+    const svbool_t pg_full = svptrue_b64();
+
+    size_t i = 0;
 
 #if defined(__clang__)
 #pragma clang loop vectorize(disable) interleave(disable)
 #endif
-    for (size_t i = 0; i < elements; i += svcntd()) {
-        const svbool_t pg = svwhilelt_b64(i, elements);
-        const svfloat64_t v = svld1_f64(pg, &src[i]);
-        acc = svadd_f64_x(pg, acc, v);
+    for (; i + vl <= elements; i += vl) {
+        const svfloat64_t v = svld1_f64(pg_full, &src[i]);
+        acc = svadd_f64_x(pg_full, acc, v);
     }
 
-    const double sum = svaddv_f64(svptrue_b64(), acc);
+    if (i < elements) {
+        const svbool_t pg = svwhilelt_b64(i, elements);
+        const svfloat64_t v = svld1_f64(pg, &src[i]);
+        acc = svadd_f64_m(pg, acc, v);
+    }
+
+    const double sum = svaddv_f64(pg_full, acc);
     do_not_optimize(sum);
     ctx.result = sum;
 }
