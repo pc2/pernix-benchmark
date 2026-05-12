@@ -51,6 +51,40 @@ TARGET_SECONDS="${TARGET_SECONDS:-0.1}"
 REPETITIONS="${REPETITIONS:-1}"
 WARMUP_ITERATIONS="${WARMUP_ITERATIONS:-100}"
 CPU_ID="${CPU_ID:--1}"
+
+detect_available_memory_bytes() {
+  if [ -n "${SLURM_MEM_PER_NODE:-}" ] && [[ "$SLURM_MEM_PER_NODE" =~ ^[0-9]+$ ]]; then
+    echo $((SLURM_MEM_PER_NODE * 1024 * 1024))
+    return
+  fi
+
+  if [ -r /proc/meminfo ]; then
+    local mem_available_kib
+    mem_available_kib="$(awk '/^MemAvailable:/ {print $2; exit}' /proc/meminfo)"
+    if [ -n "$mem_available_kib" ]; then
+      echo $((mem_available_kib * 1024))
+      return
+    fi
+  fi
+
+  if command -v sysctl &> /dev/null; then
+    local mem_size_bytes
+    mem_size_bytes="$(sysctl -n hw.memsize 2>/dev/null || true)"
+    if [[ "$mem_size_bytes" =~ ^[0-9]+$ ]]; then
+      echo "$mem_size_bytes"
+      return
+    fi
+  fi
+
+  echo 0
+}
+
+MAX_AVAILABLE_MEMORY_BYTES="$(detect_available_memory_bytes)"
+if [ "$MAX_AVAILABLE_MEMORY_BYTES" -gt 0 ]; then
+  echo "Limiting benchmark input sizes to available memory: ${MAX_AVAILABLE_MEMORY_BYTES} bytes"
+else
+  echo "Could not detect available memory. Benchmark input sizes will not be capped."
+fi
 if [ -n "$SLURM_JOB_ID" ]; then
   SLURM_EXECUTION=1
   echo "Detected SLURM environment. SLURM execution mode enabled."
@@ -197,6 +231,11 @@ runBenchmarks() {
   echo "$header" > "$output_file"
 
   for bytes in "${VALUES[@]}"; do
+    if [ "$MAX_AVAILABLE_MEMORY_BYTES" -gt 0 ] && [ "$bytes" -gt "$MAX_AVAILABLE_MEMORY_BYTES" ]; then
+      echo "Skipping data size ${bytes} bytes because it exceeds available memory (${MAX_AVAILABLE_MEMORY_BYTES} bytes)."
+      continue
+    fi
+
     row="${bytes}"
     for benchmark in "${BENCHMARKS[@]}"; do
       if [ -z "${AVAILABLE_KERNELS[$benchmark]+x}" ]; then
@@ -224,5 +263,5 @@ runBenchmarks() {
   done
 }
 
-OUTPUT_FILE="memory_benchmarks_$(date +%Y%m%d_%H%M%S).csv"
+OUTPUT_FILE="memory_bandwidth_$(date +%Y%m%d_%H%M%S).csv"
 runBenchmarks "$OUTPUT_FILE"
