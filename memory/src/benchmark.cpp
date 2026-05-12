@@ -8,10 +8,12 @@
 #include <chrono>
 #include <cmath>
 #include <iostream>
-#include <numeric>
+#include <limits>
 #include <random>
 #include <string_view>
 #include <utility>
+
+#include <membench/benchmark_stats.h>
 
 namespace membench {
 namespace {
@@ -19,6 +21,15 @@ namespace {
 struct ScaledUnit {
     double scale{};
     std::string_view unit{};
+};
+
+struct IterationScope {
+    BenchmarkContext& ctx;
+    size_t original_iterations;
+
+    ~IterationScope() {
+        ctx.config.iterations = original_iterations;
+    }
 };
 
 ScaledUnit choose_bandwidth_unit(const double bytes_per_second) {
@@ -40,38 +51,6 @@ ScaledUnit choose_bandwidth_unit(const double bytes_per_second) {
     return {scale, units[unit_index]};
 }
 
-BenchmarkStats compute_stats(std::vector<double> samples) {
-    std::sort(samples.begin(), samples.end());
-
-    const double sum = std::accumulate(samples.begin(), samples.end(), 0.0);
-    const double mean = sum / static_cast<double>(samples.size());
-
-    double squared_diff_sum = 0.0;
-    for (const double sample : samples) {
-        const double diff = sample - mean;
-        squared_diff_sum += diff * diff;
-    }
-    const double variance = samples.size() > 1
-        ? squared_diff_sum / static_cast<double>(samples.size() - 1)
-        : 0.0;
-
-    const size_t middle = samples.size() / 2;
-    const double median = samples.size() % 2 == 0
-        ? (samples[middle - 1] + samples[middle]) / 2.0
-        : samples[middle];
-
-    const size_t p95_index = static_cast<size_t>(
-        std::ceil(0.95 * static_cast<double>(samples.size())) - 1.0);
-
-    return {
-        samples.front(),
-        median,
-        mean,
-        std::sqrt(variance),
-        samples[p95_index],
-    };
-}
-
 void print_stats(const std::string_view label, const BenchmarkStats& stats, const std::string_view unit) {
     std::cout << "  " << label << " min: " << stats.min << ' ' << unit << "\n";
     std::cout << "  " << label << " median: " << stats.median << ' ' << unit << "\n";
@@ -86,6 +65,53 @@ void print_scaled_stats(const std::string_view label, const BenchmarkStats& stat
     std::cout << "  " << label << " mean: " << (stats.mean / unit.scale) << ' ' << unit.unit << "\n";
     std::cout << "  " << label << " stdev: " << (stats.stdev / unit.scale) << ' ' << unit.unit << "\n";
     std::cout << "  " << label << " p95: " << (stats.p95 / unit.scale) << ' ' << unit.unit << "\n";
+}
+
+double time_kernel_iterations(
+    const Kernel& kernel,
+    BenchmarkContext& ctx,
+    const size_t elements,
+    const size_t iterations) {
+    reset_output(ctx);
+    ctx.result = std::numeric_limits<double>::quiet_NaN();
+
+    using clock = std::chrono::steady_clock;
+    std::atomic_signal_fence(std::memory_order_seq_cst);
+    const auto t0 = clock::now();
+    for (size_t i = 0; i < iterations; ++i) {
+        kernel.kernel(ctx, elements);
+    }
+    const auto t1 = clock::now();
+    std::atomic_signal_fence(std::memory_order_seq_cst);
+
+    return std::chrono::duration<double>(t1 - t0).count();
+}
+
+size_t calculate_iterations(
+    const Kernel& kernel,
+    BenchmarkContext& ctx,
+    const size_t elements,
+    const double target_seconds) {
+    constexpr size_t max_iterations = std::numeric_limits<size_t>::max() / 2;
+
+    if (target_seconds <= 0.0) {
+        return 1;
+    }
+
+    size_t iterations = 1;
+    double seconds = time_kernel_iterations(kernel, ctx, elements, iterations);
+    while (seconds > 0.0 && seconds < target_seconds && iterations < max_iterations) {
+        const double scale = std::ceil(target_seconds / seconds);
+        const size_t multiplier = std::clamp(static_cast<size_t>(scale), size_t{2}, size_t{1024});
+        if (iterations > max_iterations / multiplier) {
+            iterations = max_iterations;
+            break;
+        }
+        iterations *= multiplier;
+        seconds = time_kernel_iterations(kernel, ctx, elements, iterations);
+    }
+
+    return std::max<size_t>(iterations, 1);
 }
 
 } // namespace
@@ -139,12 +165,8 @@ std::optional<BenchmarkResult> BenchmarkRegistry::run_kernel(const std::string& 
 }
 
 std::optional<BenchmarkResult> BenchmarkRegistry::run_kernel(const Kernel& kernel, BenchmarkContext& ctx) const {
-    const BenchmarkConfig& config = ctx.config;
+    BenchmarkConfig& config = ctx.config;
     const size_t elements = ctx.src1.size();
-    if (config.iterations == 0) {
-        std::cerr << "Kernel needs at least one measured iteration: " << kernel.name << "\n";
-        return std::nullopt;
-    }
     if (config.repetitions == 0) {
         std::cerr << "Kernel needs at least one measured repetition: " << kernel.name << "\n";
         return std::nullopt;
@@ -165,6 +187,13 @@ std::optional<BenchmarkResult> BenchmarkRegistry::run_kernel(const Kernel& kerne
         }
     }
 
+    const size_t requested_iterations = config.iterations;
+    const size_t iterations = requested_iterations == 0
+        ? calculate_iterations(kernel, ctx, elements, config.target_seconds_per_repetition)
+        : requested_iterations;
+    IterationScope iteration_scope{ctx, requested_iterations};
+    config.iterations = iterations;
+
     reset_output(ctx);
     for (size_t i = 0; i < config.warmup_iterations; ++i) {
         kernel.kernel(ctx, elements);
@@ -172,25 +201,12 @@ std::optional<BenchmarkResult> BenchmarkRegistry::run_kernel(const Kernel& kerne
 
     reset_output(ctx);
     ctx.result = std::numeric_limits<double>::quiet_NaN();
-    using clock = std::chrono::steady_clock;
 
     std::vector<double> timing_samples;
     timing_samples.reserve(config.repetitions);
 
     for (size_t repetition = 0; repetition < config.repetitions; ++repetition) {
-        reset_output(ctx);
-        ctx.result = std::numeric_limits<double>::quiet_NaN();
-
-        std::atomic_signal_fence(std::memory_order_seq_cst);
-        const auto t0 = clock::now();
-        for (size_t i = 0; i < config.iterations; ++i) {
-            kernel.kernel(ctx, elements);
-        }
-        const auto t1 = clock::now();
-        std::atomic_signal_fence(std::memory_order_seq_cst);
-
-        const std::chrono::duration<double> duration = t1 - t0;
-        const double seconds = duration.count();
+        const double seconds = time_kernel_iterations(kernel, ctx, elements, iterations);
         if (seconds <= 0.0) {
             std::cerr << "Kernel measured non-positive time\n";
             return std::nullopt;
@@ -209,14 +225,14 @@ std::optional<BenchmarkResult> BenchmarkRegistry::run_kernel(const Kernel& kerne
 
     const double bytes = static_cast<double>(elements)
         * static_cast<double>(kernel.bytes_per_element)
-        * static_cast<double>(config.iterations);
+        * static_cast<double>(iterations);
     std::vector<double> time_per_iteration_samples;
     time_per_iteration_samples.reserve(timing_samples.size());
     std::vector<double> bandwidth_samples;
     bandwidth_samples.reserve(timing_samples.size());
 
     for (const double seconds : timing_samples) {
-        time_per_iteration_samples.push_back(seconds / static_cast<double>(config.iterations));
+        time_per_iteration_samples.push_back(seconds / static_cast<double>(iterations));
         bandwidth_samples.push_back(bytes / seconds);
     }
 
@@ -229,7 +245,11 @@ std::optional<BenchmarkResult> BenchmarkRegistry::run_kernel(const Kernel& kerne
     std::cout << "Kernel: " << kernel.name << "\n";
     std::cout << "  Elements: " << elements << "\n";
     std::cout << "  Warmup iterations: " << config.warmup_iterations << "\n";
-    std::cout << "  Iterations: " << config.iterations << "\n";
+    std::cout << "  Iterations: " << iterations;
+    if (requested_iterations == 0) {
+        std::cout << " (auto, target " << config.target_seconds_per_repetition << " s/repetition)";
+    }
+    std::cout << "\n";
     std::cout << "  Repetitions: " << config.repetitions << "\n";
     std::cout << "  Seed: " << config.seed << "\n";
     print_stats("Time", time_stats, "s");
@@ -244,6 +264,7 @@ std::optional<BenchmarkResult> BenchmarkRegistry::run_kernel(const Kernel& kerne
         kernel.name,
         elements,
         kernel.bytes_per_element,
+        iterations,
         timing_samples,
         time_per_iteration_samples,
         bandwidth_samples,
@@ -265,7 +286,7 @@ std::vector<BenchmarkResult> BenchmarkRegistry::run_all(BenchmarkContext& ctx) c
 
     if (ctx.config.randomize_kernel_order) {
         std::mt19937_64 rng(ctx.config.seed);
-        std::shuffle(kernels.begin(), kernels.end(), rng);
+        std::ranges::shuffle(kernels, rng);
     }
 
     std::vector<BenchmarkResult> results;

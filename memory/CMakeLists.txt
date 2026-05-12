@@ -25,7 +25,9 @@ FetchContent_MakeAvailable(nlohmann_json_proj)
 set(MEMBENCH_SOURCES
         src/main.cpp
         src/benchmark.cpp
+        src/benchmark_stats.cpp
         src/cpu.cpp
+        src/results_json.cpp
 
         src/kernel/load/load.cpp
         src/kernel/load/load_validator.cpp

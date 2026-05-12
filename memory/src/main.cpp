@@ -1,86 +1,67 @@
-#include <CLI/CLI.hpp>
-#include <nlohmann/json.hpp>
-
 #include <membench/benchmark.h>
 
-#include <fstream>
+#include <CLI/CLI.hpp>
+#include <cctype>
 #include <iostream>
+#include <limits>
 #include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include <membench/results_json.h>
+
 namespace {
 
-using json = nlohmann::json;
-
-json stats_to_json(const membench::BenchmarkStats& stats) {
-    return {
-        {"min", stats.min},
-        {"median", stats.median},
-        {"mean", stats.mean},
-        {"stdev", stats.stdev},
-        {"p95", stats.p95},
-    };
-}
-
-json result_to_json(const membench::BenchmarkResult& result) {
-    return {
-        {"kernel", result.kernel},
-        {"elements", result.elements},
-        {"bytes_per_element", result.bytes_per_element},
-        {"validation_passed", result.validation_passed},
-        {"time_seconds", stats_to_json(result.time_seconds)},
-        {"time_per_iteration_seconds", stats_to_json(result.time_per_iteration_seconds)},
-        {"bandwidth_bytes_per_second", stats_to_json(result.bandwidth_bytes_per_second)},
-        {"bandwidth_display_unit", result.bandwidth_unit},
-        {"bandwidth_display_scale", result.bandwidth_unit_scale},
-        {"samples", {
-            {"time_seconds", result.time_seconds_samples},
-            {"time_per_iteration_seconds", result.time_per_iteration_seconds_samples},
-            {"bandwidth_bytes_per_second", result.bandwidth_bytes_per_second_samples},
-        }},
-    };
-}
-
-json results_to_json(
-    const membench::BenchmarkConfig& config,
-    const std::vector<membench::BenchmarkResult>& results) {
-    json result_items = json::array();
-    for (const membench::BenchmarkResult& result : results) {
-        result_items.push_back(result_to_json(result));
+std::optional<size_t> parse_size_bytes(const std::string& value) {
+    std::string compact;
+    compact.reserve(value.size());
+    for (const unsigned char c : value) {
+        if (!std::isspace(c)) {
+            compact.push_back(static_cast<char>(std::toupper(c)));
+        }
     }
 
-    return {
-        {"config", {
-            {"bytes", config.bytes},
-            {"iterations", config.iterations},
-            {"repetitions", config.repetitions},
-            {"warmup_iterations", config.warmup_iterations},
-            {"seed", config.seed},
-            {"cpu_id", config.cpu_id},
-            {"randomize_kernel_order", config.randomize_kernel_order},
-        }},
-        {"results", std::move(result_items)},
-    };
-}
-
-bool write_results_json(
-    const std::string& path,
-    const membench::BenchmarkConfig& config,
-    const std::vector<membench::BenchmarkResult>& results) {
-    std::ofstream out(path);
-    if (!out) {
-        std::cerr << "Failed to open output file: " << path << "\n";
-        return false;
+    if (compact.empty()) {
+        return std::nullopt;
     }
 
-    out << results_to_json(config, results).dump(2) << "\n";
-    if (!out) {
-        std::cerr << "Failed to write output file: " << path << "\n";
-        return false;
+    size_t number_end = 0;
+    while (number_end < compact.size() && std::isdigit(static_cast<unsigned char>(compact[number_end]))) {
+        ++number_end;
     }
-    return true;
+
+    if (number_end == 0) {
+        return std::nullopt;
+    }
+
+    size_t multiplier = 1;
+    const std::string unit = compact.substr(number_end);
+    if (unit.empty() || unit == "B") {
+        multiplier = 1;
+    } else if (unit == "KB") {
+        multiplier = 1024;
+    } else if (unit == "MB") {
+        multiplier = 1024 * 1024;
+    } else if (unit == "GB") {
+        multiplier = 1024 * 1024 * 1024;
+    } else {
+        return std::nullopt;
+    }
+
+    size_t number = 0;
+    for (size_t i = 0; i < number_end; ++i) {
+        const size_t digit = static_cast<size_t>(compact[i] - '0');
+        if (number > (std::numeric_limits<size_t>::max() - digit) / 10) {
+            return std::nullopt;
+        }
+        number = number * 10 + digit;
+    }
+
+    if (number > std::numeric_limits<size_t>::max() / multiplier) {
+        return std::nullopt;
+    }
+    return number * multiplier;
 }
 
 } // namespace
@@ -88,22 +69,25 @@ bool write_results_json(
 int main(int argc, char** argv) {
     membench::BenchmarkConfig config = {
         8 * 1024,
-        10000000,
+        0,
         1,
         100,
+        0.1,
         33378,
         -1,
         false,
     };
+    std::string bytes_value = "8KB";
     std::string kernel_name;
     std::string output_path;
     bool list_kernels = false;
 
     CLI::App app{"Memory bandwidth benchmark"};
-    app.add_option("--bytes", config.bytes, "Bytes per benchmark array");
-    app.add_option("-i,--iterations", config.iterations, "Iterations per measured repetition");
+    app.add_option("-b,--bytes", bytes_value, "Bytes per benchmark array, with optional B, KB, MB, or GB suffix");
+    app.add_option("-i,--iterations", config.iterations, "Iterations per measured repetition, or 0 to auto-calibrate");
     app.add_option("-r,--repetitions", config.repetitions, "Measured timing samples per kernel");
     app.add_option("--warmup-iterations", config.warmup_iterations, "Warmup iterations before measuring");
+    app.add_option("--target-seconds", config.target_seconds_per_repetition, "Target seconds per measured repetition when iterations is 0");
     app.add_option("--seed", config.seed, "Seed for data initialization and randomized kernel order");
     app.add_option("--cpu-id", config.cpu_id, "CPU id for affinity, or a negative value to disable affinity");
     app.add_option("-k,--kernel", kernel_name, "Run only one kernel by name");
@@ -120,12 +104,19 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    if (config.iterations == 0) {
-        std::cerr << "iterations must be greater than zero\n";
+    const std::optional<size_t> parsed_bytes = parse_size_bytes(bytes_value);
+    if (!parsed_bytes) {
+        std::cerr << "bytes must be an integer with optional B, KB, MB, or GB suffix\n";
         return 1;
     }
+    config.bytes = *parsed_bytes;
+
     if (config.repetitions == 0) {
         std::cerr << "repetitions must be greater than zero\n";
+        return 1;
+    }
+    if (config.target_seconds_per_repetition <= 0.0) {
+        std::cerr << "target seconds must be greater than zero\n";
         return 1;
     }
     if (config.bytes < sizeof(double) || config.bytes % sizeof(double) != 0) {
@@ -149,7 +140,7 @@ int main(int argc, char** argv) {
         results = registry.run_all(ctx);
     }
 
-    if (!output_path.empty() && !write_results_json(output_path, config, results)) {
+    if (!output_path.empty() && !membench::write_results_json(output_path, config, results)) {
         return 1;
     }
 

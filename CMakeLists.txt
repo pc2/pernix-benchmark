@@ -18,3 +18,5 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 add_subdirectory(external)
 
 add_subdirectory(src)
+
+add_subdirectory(memory)

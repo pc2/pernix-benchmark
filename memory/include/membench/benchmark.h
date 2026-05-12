@@ -19,9 +19,10 @@ constexpr double daxpy_alpha = 2.0;
 
 struct BenchmarkConfig {
     size_t bytes;
-    size_t iterations;
+    size_t iterations; // zero means auto-calibrate per kernel
     size_t repetitions;
     size_t warmup_iterations;
+    double target_seconds_per_repetition;
     uint64_t seed;
     int32_t cpu_id; // if negative, do not set affinity
     bool randomize_kernel_order;
@@ -91,6 +92,7 @@ struct BenchmarkResult {
     std::string kernel;
     size_t elements{};
     size_t bytes_per_element{};
+    size_t iterations{};
     std::vector<double> time_seconds_samples;
     std::vector<double> time_per_iteration_seconds_samples;
     std::vector<double> bandwidth_bytes_per_second_samples;
