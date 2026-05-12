@@ -11,7 +11,7 @@
 #SBATCH -p normal
 
 VALUES=(128 256 384 512 640 768 896 1024 1280 1536 1792 2048 2560 3072 3584 4096 5120 6144 7168 8192 10240 12288 14336 16384 20480 24576 28672 32768 40960 49152 57344 65536 81920 98304 114688 131072 163840 196608 229376 262144 327680 393216 458752 524288 655360 786432 917504 1048576 1310720 1572864 1835008 2097152 2621440 3145728 3670016 4194304 5242880 6291456 7340032 8388608 10485760 12582912 14680064 16777216 20971520 25165824 29360128 33554432 41943040 50331648 58720256 67108864 83886080 100663296 117440512 134217728 167772160 201326592 234881024 268435456 335544320 402653184 469762048 536870912 671088640 805306368 939524096 1073741824)
-BENCHMARKS=(daxpy_scalar daxpy_sse daxpy_avx2 daxpy_avx512 copy_scalar copy_sse copy_sse_nt copy_avx2 copy_avx2_nt copy_avx512 copy_avx512_nt ddot_scalar ddot_sse ddot_avx2 ddot_avx512 update_scalar update_sse update_avx2 update_avx512 triad_scalar triad_sse triad_avx2 triad_avx512 load_scalar load_sse load_sse_nt load_avx2 load_avx512 store_scalar store_sse store_avx2 store_avx512)
+BENCHMARKS=(daxpy_scalar daxpy_neon daxpy_sve daxpy_sse daxpy_avx2 daxpy_avx512 copy_scalar copy_neon copy_sve copy_sse copy_sse_nt copy_avx2 copy_avx2_nt copy_avx512 copy_avx512_nt ddot_scalar ddot_neon ddot_sve ddot_sse ddot_avx2 ddot_avx512 update_scalar update_neon update_sve update_sse update_avx2 update_avx512 triad_scalar triad_neon triad_sve triad_sse triad_avx2 triad_avx512 load_scalar load_neon load_sve load_sse load_sse_nt load_avx2 load_avx512 store_scalar store_neon store_sve store_sse store_avx2 store_avx512)
 
 # Navigate to project root if script is run from scripts directory
 if [ "$(basename "$PWD")" == "scripts" ]; then
