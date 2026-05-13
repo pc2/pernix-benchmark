@@ -24,7 +24,7 @@ static void daxpy_sve_kernel(BenchmarkContext& ctx, size_t elements) {
         const svfloat64_t x = svld1_f64(pg_full, &src[i]);
         const svfloat64_t y = svld1_f64(pg_full, &dst[i]);
 
-        const svfloat64_t r = svadd_f64_x(pg_full, svmul_f64_x(pg_full, alpha, x), y);
+        const svfloat64_t r = svmla_f64_x(pg_full, y, alpha, x);
 
         svst1_f64(pg_full, &dst[i], r);
     }
@@ -34,7 +34,7 @@ static void daxpy_sve_kernel(BenchmarkContext& ctx, size_t elements) {
         const svfloat64_t x = svld1_f64(pg, &src[i]);
         const svfloat64_t y = svld1_f64(pg, &dst[i]);
 
-        const svfloat64_t r = svadd_f64_x(pg, svmul_f64_x(pg, alpha, x), y);
+        const svfloat64_t r = svmla_f64_x(pg, y, alpha, x);
 
         svst1_f64(pg, &dst[i], r);
     }

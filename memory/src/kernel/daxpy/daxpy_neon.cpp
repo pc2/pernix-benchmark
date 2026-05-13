@@ -19,7 +19,7 @@ static void daxpy_neon_kernel(BenchmarkContext& ctx, size_t elements) {
     for (; i + 2 <= elements; i += 2) {
         const float64x2_t x = vld1q_f64(&src[i]);
         const float64x2_t y = vld1q_f64(&dst[i]);
-        vst1q_f64(&dst[i], vaddq_f64(vmulq_f64(alpha, x), y));
+        vst1q_f64(&dst[i], vfmaq_f64(y, alpha, x));
     }
 
     for (; i < elements; ++i) {
