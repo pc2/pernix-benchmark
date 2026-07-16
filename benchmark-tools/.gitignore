@@ -1,5 +1,5 @@
-# Created by https://www.toptal.com/developers/gitignore/api/cmake,linux,macos,ninja,windows,jetbrains+all,visualstudiocode,python
-# Edit at https://www.toptal.com/developers/gitignore?templates=cmake,linux,macos,ninja,windows,jetbrains+all,visualstudiocode,python
+# Created by https://www.toptal.com/developers/gitignore/api/cmake,linux,macos,python,windows,jetbrains+all,visualstudiocode
+# Edit at https://www.toptal.com/developers/gitignore?templates=cmake,linux,macos,python,windows,jetbrains+all,visualstudiocode
 
 ### CMake ###
 CMakeLists.txt.user
@@ -155,10 +155,6 @@ Temporary Items
 ### macOS Patch ###
 # iCloud generated files
 *.icloud
-
-### Ninja ###
-.ninja_deps
-.ninja_log
 
 ### Python ###
 # Byte-compiled / optimized / DLL files
@@ -328,7 +324,6 @@ poetry.toml
 
 # ruff
 .ruff_cache/
-benchmark-results/
 
 # LSP config files
 pyrightconfig.json
@@ -378,4 +373,4 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
-# End of https://www.toptal.com/developers/gitignore/api/cmake,linux,macos,ninja,windows,jetbrains+all,visualstudiocode,python
+# End of https://www.toptal.com/developers/gitignore/api/cmake,linux,macos,python,windows,jetbrains+all,visualstudiocode

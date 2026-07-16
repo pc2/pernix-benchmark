@@ -1,12 +1,12 @@
 #include <benchmark.h>
-#include <pernix/pernix.h>
+#include <pernix/fallback/scalar_decompression.h>
 
 
 template<uint8_t BIT_WIDTH, bool DISABLE_MEM, typename ValueT>
 class BenchmarkDecompressorFALLBACK : public BenchmarkDecompressor<BIT_WIDTH, true, DISABLE_MEM, ValueT> {
 public:
     int decompress(const uint8_t *input, const ValueT scale, ValueT *output) override {
-        return pernix::decompress_block_fallback<BIT_WIDTH>(input, scale, output);
+        return pernix::decompress_block_fallback<BIT_WIDTH, true, 64>(input, scale, output);
     }
 };
 

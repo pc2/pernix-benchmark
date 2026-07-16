@@ -1,11 +1,11 @@
 #include <benchmark.h>
-#include <pernix/pernix.h>
+#include <pernix/x86/avx512vbmi/avx512vbmi_compression.h>
 
 template<uint8_t BIT_WIDTH, bool DISABLE_MEM, typename ValueT>
 class BenchmarkCompressorAVX512VBMI : public BenchmarkCompressor<BIT_WIDTH, DISABLE_MEM, ValueT> {
 public:
     __always_inline int compress(const ValueT *input, const ValueT scale, uint8_t *output) override {
-        return pernix::mm512_compress_block_avx512vbmi<BIT_WIDTH>(input, scale, output);
+        return pernix::mm512_compress_block_avx512vbmi<BIT_WIDTH, 64>(input, scale, output);
     }
 };
 
