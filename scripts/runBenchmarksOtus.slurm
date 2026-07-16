@@ -31,13 +31,13 @@ module load lang/Python/3.13.5-GCCcore-14.3.0
 module load devel/CMake/4.0.3-GCCcore-14.3.0
 module load tools/googlebenchmark/1.9.4-GCCcore-14.3.0
 
-if ! command -v uv >/dev/null 2>&1; then
-    echo "uv is not available. Install it in your user environment before submitting." >&2
+if ! python -m uv --version >/dev/null 2>&1; then
+    echo "The loaded Python cannot import uv. Install uv before submitting." >&2
     exit 1
 fi
 
 if [[ ! -x "${PYTHON_PROJECT}/.venv/bin/python" ]]; then
-    echo "The uv environment is missing. Run 'uv sync --frozen' in benchmark-tools on an Otus login node first." >&2
+    echo "The uv environment is missing. Run 'python -m uv sync --frozen' in benchmark-tools on an Otus login node first." >&2
     exit 1
 fi
 
@@ -59,7 +59,7 @@ echo "Build CPUs: ${SLURM_CPUS_PER_TASK}"
 cd "${PYTHON_PROJECT}"
 
 command=(
-    uv run --frozen --no-sync pernix-bench run
+    python -m uv run --frozen --no-sync pernix-bench run
     --jobs "${SLURM_CPUS_PER_TASK}"
     --build-dir "${BUILD_DIR}"
     --output-dir "${RESULT_DIR}"
