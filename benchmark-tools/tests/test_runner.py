@@ -171,6 +171,11 @@ def test_run_targets_configures_once_and_runs_each_executable(tmp_path: Path) ->
     assert first_benchmark_command[1].endswith(
         "benchmark_pernix_avx2_results.json"
     )
+    assert "--benchmark_min_time=0.25s" in first_benchmark_command
+    assert (
+        "--benchmark_context=benchmark_min_time_seconds=0.25"
+        in first_benchmark_command
+    )
     assert events == [
         "build",
         "build",
@@ -212,3 +217,31 @@ def test_machine_state_failure_warns_cleans_partial_file_and_continues(
     assert run.call_count == 2
     assert not (output_dir / "machinestate.json").exists()
     assert "MachineState collection failed" in caplog.text
+
+
+def test_run_targets_forwards_custom_benchmark_min_time(tmp_path: Path) -> None:
+    from pernix_benchmark_tools import runner
+
+    repository = tmp_path / "repository"
+    build_dir = repository / "build-dir"
+    executable = build_dir / "src" / "bench_cp2k"
+    executable.parent.mkdir(parents=True)
+    executable.touch()
+
+    project = MagicMock(build_dir=build_dir)
+    options = RunOptions(
+        output_dir=str(repository / "output"),
+        benchmark_min_time=1.5,
+    )
+
+    with (
+        patch.object(runner, "find_repository_root", return_value=repository),
+        patch.object(runner, "_create_project", return_value=project),
+        patch.object(runner, "_collect_machine_state"),
+        patch.object(runner.subprocess, "run") as run,
+    ):
+        runner._run_targets(("cp2k",), options)
+
+    command = run.call_args.args[0]
+    assert "--benchmark_min_time=1.5s" in command
+    assert "--benchmark_context=benchmark_min_time_seconds=1.5" in command

@@ -35,13 +35,6 @@ if (PERNIX_BENCHMARK_USE_SIMDE)
     endif ()
 endif ()
 
-file(GLOB_RECURSE
-        CP2K_SOURCE_FILES
-        cp2k/*.cpp
-        cp2k/*.f90
-        cp2k/*.c
-)
-
 find_package(OpenMP)
 function(add_pernix_benchmark variant compile_opts)
     file(GLOB_RECURSE
@@ -74,13 +67,28 @@ if (PERNIX_BENCHMARK_TARGET_IS_ARM64)
 endif ()
 add_pernix_benchmark(fallback -g -v)
 
-# add_executable(bench_cp2k)
-add_executable(bench_cp2k main.cpp)
-target_sources(bench_cp2k PRIVATE ${CP2K_SOURCE_FILES})
-target_link_libraries(bench_cp2k PRIVATE ${BENCHMARK_LDFLAGS} cp2k_compression)
-target_include_directories(bench_cp2k PRIVATE "${CMAKE_BINARY_DIR}/fortran_modules/cp2k")
-add_dependencies(bench_cp2k cp2k_compression)
+add_library(cp2k_benchmark_adapter STATIC cp2k/cp2k_benchmarks.f90)
+target_link_libraries(cp2k_benchmark_adapter PRIVATE cp2k_compression)
+target_include_directories(cp2k_benchmark_adapter PRIVATE "${CMAKE_BINARY_DIR}/fortran_modules/cp2k")
+add_dependencies(cp2k_benchmark_adapter cp2k_compression)
+target_compile_options(cp2k_benchmark_adapter PRIVATE
+        $<$<COMPILE_LANGUAGE:Fortran>:-ffree-form -ffree-line-length-none -g -march=native>
+)
+set_target_properties(cp2k_benchmark_adapter PROPERTIES
+        Fortran_MODULE_DIRECTORY "${CMAKE_BINARY_DIR}/fortran_modules/cp2k_benchmark_adapter"
+)
+
+add_executable(bench_cp2k main.cpp cp2k/cp2k_benchmarks.cpp)
+target_link_libraries(bench_cp2k PRIVATE ${BENCHMARK_LDFLAGS} cp2k_benchmark_adapter)
+target_include_directories(bench_cp2k PRIVATE ${CMAKE_SOURCE_DIR}/external/pernix/include)
+target_include_directories(bench_cp2k PRIVATE pernix/include)
 target_compile_options(bench_cp2k PRIVATE ${BENCHMARK_CFLAGS} -g -march=native)
 if (OpenMP_CXX_FOUND)
     target_link_libraries(bench_cp2k PUBLIC OpenMP::OpenMP_CXX)
+endif ()
+
+if (BUILD_TESTING)
+    add_executable(cp2k_benchmark_adapter_test ../tests/cp2k_benchmark_adapter_test.cpp)
+    target_link_libraries(cp2k_benchmark_adapter_test PRIVATE cp2k_benchmark_adapter)
+    add_test(NAME cp2k_benchmark_adapter_test COMMAND cp2k_benchmark_adapter_test)
 endif ()

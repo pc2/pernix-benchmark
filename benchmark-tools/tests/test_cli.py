@@ -35,6 +35,7 @@ def test_bare_run_dispatches_all_benchmarks() -> None:
     assert result == 0
     options = run.call_args.args[0]
     assert options.jobs == 3
+    assert options.benchmark_min_time == 0.25
 
 
 @pytest.mark.parametrize("command", ["memory", "transform"])
@@ -70,6 +71,29 @@ def test_run_options_work_before_selected_family() -> None:
 def test_jobs_must_be_positive() -> None:
     with pytest.raises(SystemExit) as error:
         build_parser().parse_args(["run", "cp2k", "--jobs", "0"])
+
+    assert error.value.code == 2
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["run", "--benchmark-min-time", "0.5", "cp2k"],
+        ["run", "cp2k", "--benchmark-min-time", "0.5"],
+    ],
+)
+def test_benchmark_min_time_works_before_or_after_family(
+    arguments: list[str],
+) -> None:
+    args = build_parser().parse_args(arguments)
+
+    assert args.benchmark_min_time == 0.5
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "nan", "inf", "-inf"])
+def test_benchmark_min_time_must_be_positive_and_finite(value: str) -> None:
+    with pytest.raises(SystemExit) as error:
+        build_parser().parse_args(["run", "--benchmark-min-time", value])
 
     assert error.value.code == 2
 

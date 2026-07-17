@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import math
 import subprocess
 from collections.abc import Sequence
 
@@ -30,6 +31,13 @@ def _positive_int(value: str) -> int:
     parsed = int(value)
     if parsed < 1:
         raise argparse.ArgumentTypeError("must be at least 1")
+    return parsed
+
+
+def _positive_finite_float(value: str) -> float:
+    parsed = float(value)
+    if not math.isfinite(parsed) or parsed <= 0:
+        raise argparse.ArgumentTypeError("must be a finite number greater than zero")
     return parsed
 
 
@@ -73,6 +81,13 @@ def _add_run_options(
         default=argparse.SUPPRESS if suppress_defaults else False,
         help="Delete the selected build directory before configuring.",
     )
+    parser.add_argument(
+        "--benchmark-min-time",
+        type=_positive_finite_float,
+        default=argparse.SUPPRESS if suppress_defaults else 0.25,
+        metavar="SECONDS",
+        help="Minimum measurement time per benchmark case (default: 0.25 seconds).",
+    )
 
 
 def _options(args: argparse.Namespace) -> RunOptions:
@@ -83,6 +98,7 @@ def _options(args: argparse.Namespace) -> RunOptions:
         build_dir=args.build_dir,
         output_dir=args.output_dir,
         clean=args.clean,
+        benchmark_min_time=args.benchmark_min_time,
     )
 
 

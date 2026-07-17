@@ -41,6 +41,7 @@ class RunOptions:
     build_dir: str | None = None
     output_dir: str | None = None
     clean: bool = False
+    benchmark_min_time: float = 0.25
 
 
 def normalize_architecture(machine: str) -> str:
@@ -211,6 +212,9 @@ def _run_targets(targets: tuple[str, ...], options: RunOptions) -> Path:
             str(executable),
             f"--benchmark_out={output_file}",
             "--benchmark_out_format=json",
+            f"--benchmark_min_time={options.benchmark_min_time:g}s",
+            "--benchmark_context="
+            f"benchmark_min_time_seconds={options.benchmark_min_time:g}",
         ]
         logger.info("Running benchmark target: %s", target)
         subprocess.run(command, cwd=project.build_dir, check=True)

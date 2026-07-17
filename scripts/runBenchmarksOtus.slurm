@@ -30,6 +30,7 @@ module reset
 module load tools/googlebenchmark/1.9.4-GCCcore-14.3.0
 module load devel/CMake/4.2.1-GCCcore-15.2.0
 module load lang/Python/3.14.2-GCCcore-15.2.0
+module load compiler/GCC/15.2.0
 
 if ! python -m pip show uv >/dev/null 2>&1; then
     echo "Installing uv in the user site-packages directory."

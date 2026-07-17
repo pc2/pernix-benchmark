@@ -8,16 +8,16 @@ Benchmark targets locally. The existing scripts remain available in
 ## Setup
 
 ```console
-uv sync
-uv run pernix-bench --help
+python -m uv sync
+python -m uv run pernix-bench --help
 ```
 
 For result exploration and visualization, install the optional notebook
 environment and start JupyterLab from this directory:
 
 ```console
-uv sync --group notebook
-uv run --group notebook jupyter lab notebooks/
+python -m uv sync --group notebook
+python -m uv run --group notebook jupyter lab notebooks/
 ```
 
 ## Commands
@@ -26,20 +26,20 @@ Run every Pernix implementation supported by the current CPU, followed by
 CP2K:
 
 ```console
-uv run pernix-bench run
+python -m uv run pernix-bench run
 ```
 
 Run only the supported Pernix implementations:
 
 ```console
-uv run pernix-bench run pernix
+python -m uv run pernix-bench run pernix
 ```
 
 Run one implementation or CP2K:
 
 ```console
-uv run pernix-bench run pernix avx2
-uv run pernix-bench run cp2k
+python -m uv run pernix-bench run pernix avx2
+python -m uv run pernix-bench run cp2k
 ```
 
 Pernix implementation names are `fallback`, `avx2`, `bmi2`, `avx512vbmi`,
@@ -49,12 +49,22 @@ architecture and CPU features. On ARM, the NEON and SVE2 executables currently
 contain decompression benchmarks only because Pernix ARM compression is not yet
 implemented.
 
+The CP2K executable benchmarks its f32 and f64 packing kernels in the same 512-bit
+matrix as Pernix for bit widths 1 through 24. Both cache-hot core (`true`) and full
+memory-throughput (`false`) modes use the common
+`BM_[direction]_cp2k[value_type]_[core]_[width]/[blocks]` format so result rows can be
+compared directly. Core mode reuses small buffers; the kernels still execute loads and stores.
+
 Both commands accept `--compiler`, `--build-type`, `--jobs`, `--build-dir`,
-`--output-dir`, and `--clean`. By default, results are Google Benchmark JSON
+`--output-dir`, `--clean`, and `--benchmark-min-time`. The minimum measurement
+time defaults to 0.25 seconds per case, which preserves the complete matrix while
+reducing a full Otus run to roughly two hours. Increase it for lower-noise runs,
+for example with `--benchmark-min-time 1.0`. Results are Google Benchmark JSON
 files under `../benchmark-results/<YYYYMMDD_HHMMSS>/`. Before benchmark
 execution, the CLI captures extended system information once per invocation in
 `machinestate.json` in the same directory. Collection failures are reported as
-warnings and do not prevent benchmarks from running.
+warnings and do not prevent benchmarks from running. Each result's Google
+Benchmark context records the selected minimum time.
 
 ## Otus SLURM jobs
 
@@ -68,7 +78,7 @@ module load lang/Python/3.13.5-GCCcore-14.3.0
 module load devel/CMake/4.0.3-GCCcore-14.3.0
 module load tools/googlebenchmark/1.9.4-GCCcore-14.3.0
 cd benchmark-tools
-uv sync --frozen
+python -m uv sync --frozen
 cd ..
 ```
 

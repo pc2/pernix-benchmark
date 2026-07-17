@@ -41,12 +41,18 @@ Options:
 * SIMDe AVX512-VBMI: `bash scripts/runBenchmarks.sh --target pernix_avx512vbmi --release-type Release --simde`
 
 # Meaning of Benchmark Identifiers
-`BM_[direction]_[target]_[core-throughput flag]_[bit width]/[number of blocks per iteration]`
+`BM_[direction]_[target][value type]_[core-throughput flag]_[bit width]/[number of blocks per iteration]`
 * direction: compress, decompress
-* target (instruction set): pernix_fallback, pernix_avx2, pernix_bmi2, pernix_avx512vbmi, cp2k
+* target (instruction set or implementation): fallback, avx2, bmi2, avx512vbmi, cp2k
+* value type: f32 or f64
 * core-throughput flag: true= no loads and stores (core-throughput scenario), false=including loads and stores (full throughput scenario)
 * bit width: width of compressed numbers
 * number of blocks per iteration: number of 512-bit blocks processed per iteration
+
+The CP2K target benchmarks its packing kernels with equivalent quantization and uses the
+`cp2kf32` and `cp2kf64` dimensions: single or double precision, cache-hot core or full
+throughput, and bit widths 1 through 24.
+
 # Example Output (AMD Ryzen 7 9700X, GCC 15.2.0):
 * bash scripts/runBenchmarks.sh --target pernix_avx512vbmi --release-type Release
 ```
