@@ -27,9 +27,14 @@ if [[ ! -f "${REPOSITORY_ROOT}/CMakeLists.txt" || ! -f "${PYTHON_PROJECT}/pyproj
 fi
 
 module reset
-module load lang/Python/3.13.5-GCCcore-14.3.0
-module load devel/CMake/4.0.3-GCCcore-14.3.0
 module load tools/googlebenchmark/1.9.4-GCCcore-14.3.0
+module load devel/CMake/4.2.1-GCCcore-15.2.0
+module load lang/Python/3.14.2-GCCcore-15.2.0
+
+if ! python -m pip show uv >/dev/null 2>&1; then
+    echo "Installing uv in the user site-packages directory."
+    python -m pip install --user uv
+fi
 
 if ! python -m uv --version >/dev/null 2>&1; then
     echo "The loaded Python cannot import uv. Install uv before submitting." >&2
