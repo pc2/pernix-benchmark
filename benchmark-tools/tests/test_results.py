@@ -93,6 +93,30 @@ def test_loads_corrected_cp2k_names_with_comparable_schema(tmp_path: Path) -> No
     assert set(results["benchmark_schema"]) == {"pernix_v1"}
     assert set(results["bit_width"]) == {1, 24}
 
+
+def test_loads_and_normalizes_pcie_results(tmp_path: Path) -> None:
+    _write_result(
+        tmp_path / "benchmark_pcie_avx2_results.json",
+        [
+            "BM_pcie_h2d_avx2f32_1/4096",
+            "BM_pcie_d2h_avx2f64_24/67108864",
+        ],
+    )
+
+    results = load_benchmark_results(tmp_path)
+
+    h2d = results.loc[results["transfer_direction"] == "h2d"].iloc[0]
+    assert h2d["implementation"] == "avx2"
+    assert h2d["direction"] == "compression"
+    assert h2d["memory_mode"] == "pcie"
+    assert h2d["payload_bytes"] == 4096
+    assert h2d["blocks"] == 64
+    assert h2d["benchmark_schema"] == "pcie_v1"
+
+    d2h = results.loc[results["transfer_direction"] == "d2h"].iloc[0]
+    assert d2h["direction"] == "decompression"
+    assert d2h["payload_bytes"] == 67108864
+
 def test_loads_one_flattened_context_per_result_file(tmp_path: Path) -> None:
     _write_result(
         tmp_path / "benchmark_pernix_bmi2_results.json",

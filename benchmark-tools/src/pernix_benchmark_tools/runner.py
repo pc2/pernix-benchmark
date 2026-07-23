@@ -42,6 +42,7 @@ class RunOptions:
     output_dir: str | None = None
     clean: bool = False
     benchmark_min_time: float = 0.25
+    enable_cuda: bool = False
 
 
 def normalize_architecture(machine: str) -> str:
@@ -144,7 +145,8 @@ def resolve_build_dir(repository: Path, options: RunOptions) -> Path:
         return Path(options.build_dir).expanduser().resolve()
     compiler = _safe_build_component(Path(options.compiler).name)
     build_type = _safe_build_component(options.build_type.lower())
-    return repository / "build" / f"benchmarks_{compiler}_{build_type}"
+    suffix = "_cuda" if options.enable_cuda else ""
+    return repository / "build" / f"benchmarks_{compiler}_{build_type}{suffix}"
 
 
 def resolve_output_dir(
@@ -165,7 +167,10 @@ def _create_project(repository: Path, options: RunOptions) -> CMakeProject:
         build_dir=resolve_build_dir(repository, options),
         build_type=options.build_type,
         jobs=options.jobs or os.cpu_count() or 1,
-        definitions={"CMAKE_CXX_COMPILER": options.compiler},
+        definitions={
+            "CMAKE_CXX_COMPILER": options.compiler,
+            "PERNIX_BENCHMARK_ENABLE_CUDA": "ON" if options.enable_cuda else "OFF",
+        },
     )
 
 
@@ -238,6 +243,30 @@ def run_pernix(
 
 def run_cp2k(options: RunOptions) -> int:
     _run_targets(("cp2k",), options)
+    return 0
+
+
+def run_pcie(
+    variant: str | None,
+    options: RunOptions,
+    *,
+    host: HostCapabilities | None = None,
+) -> int:
+    detected = host or detect_host()
+    if detected.architecture != "x86":
+        raise RuntimeError("CUDA PCIe benchmarks currently support x86 Pernix implementations only")
+    selected = select_pernix_variants(variant, detected)
+    cuda_options = RunOptions(
+        compiler=options.compiler,
+        build_type=options.build_type,
+        jobs=options.jobs,
+        build_dir=options.build_dir,
+        output_dir=options.output_dir,
+        clean=options.clean,
+        benchmark_min_time=options.benchmark_min_time,
+        enable_cuda=True,
+    )
+    _run_targets(tuple(f"pcie_{name}" for name in selected), cuda_options)
     return 0
 
 

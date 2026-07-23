@@ -15,6 +15,7 @@ from pernix_benchmark_tools.runner import (
     resolve_build_dir,
     resolve_output_dir,
     run_all,
+    run_pcie,
     run_pernix,
     select_pernix_variants,
 )
@@ -119,6 +120,24 @@ def test_run_all_maps_supported_pernix_targets_and_cp2k() -> None:
         ("pernix_fallback", "pernix_avx2", "cp2k"),
         options,
     )
+
+
+def test_run_pcie_maps_x86_variants_to_cuda_targets() -> None:
+    host = HostCapabilities("x86", frozenset({"avx2", "bmi2"}))
+    options = RunOptions()
+
+    with patch("pernix_benchmark_tools.runner._run_targets") as run_targets:
+        result = run_pcie(None, options, host=host)
+
+    assert result == 0
+    targets, cuda_options = run_targets.call_args.args
+    assert targets == ("pcie_fallback", "pcie_avx2", "pcie_bmi2")
+    assert cuda_options.enable_cuda
+
+
+def test_run_pcie_rejects_non_x86_hosts() -> None:
+    with pytest.raises(RuntimeError, match="x86"):
+        run_pcie(None, RunOptions(), host=HostCapabilities("arm64", frozenset({"asimd"})))
 
 
 def test_run_targets_configures_once_and_runs_each_executable(tmp_path: Path) -> None:

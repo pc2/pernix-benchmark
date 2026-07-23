@@ -22,6 +22,14 @@ CP2K_BENCHMARK_RE = re.compile(
 PERNIX_RESULT_RE = re.compile(
     r"^benchmark_pernix_(?P<implementation>[A-Za-z0-9]+)_results\.json$"
 )
+PCIE_BENCHMARK_RE = re.compile(
+    r"^BM_pcie_(?P<transfer_direction>h2d|d2h)_"
+    r"(?P<implementation>[A-Za-z0-9]+?)(?P<value_type>f32|f64)_"
+    r"(?P<bit_width>\d+)/(?P<payload_bytes>\d+)$"
+)
+PCIE_RESULT_RE = re.compile(
+    r"^benchmark_pcie_(?P<implementation>[A-Za-z0-9]+)_results\.json$"
+)
 
 
 def _read_result(path: Path) -> tuple[pd.DataFrame, dict[str, object]]:
@@ -88,13 +96,35 @@ def _parse_cp2k(frame: pd.DataFrame, path: Path) -> pd.DataFrame:
     return extracted
 
 
+def _parse_pcie(frame: pd.DataFrame, path: Path, implementation: str) -> pd.DataFrame:
+    extracted = frame["name"].str.extract(PCIE_BENCHMARK_RE)
+    _require_matches(frame["name"], extracted, path.name)
+    parsed_implementations = set(extracted["implementation"])
+    if parsed_implementations != {implementation}:
+        raise ValueError(
+            f"Implementation encoded by {path.name!r} is {implementation!r}, but "
+            f"benchmark names contain {sorted(parsed_implementations)!r}"
+        )
+    extracted["direction"] = extracted["transfer_direction"].map(
+        {"h2d": "compression", "d2h": "decompression"}
+    )
+    extracted["core_throughput"] = False
+    extracted["memory_mode"] = "pcie"
+    extracted["blocks"] = pd.to_numeric(extracted["payload_bytes"], errors="raise") // 64
+    extracted["benchmark_schema"] = "pcie_v1"
+    return extracted
+
+
 def _normalize_file(path: Path) -> tuple[pd.DataFrame, dict[str, object]]:
     frame, context = _read_result(path)
     if "name" not in frame:
         raise ValueError(f"Benchmark result {path} contains no name column")
 
+    pcie_match = PCIE_RESULT_RE.fullmatch(path.name)
     pernix_match = PERNIX_RESULT_RE.fullmatch(path.name)
-    if pernix_match:
+    if pcie_match:
+        extracted = _parse_pcie(frame, path, pcie_match.group("implementation"))
+    elif pernix_match:
         extracted = _parse_pernix(frame, path, pernix_match.group("implementation"))
     elif path.name == "benchmark_cp2k_results.json":
         extracted = _parse_cp2k(frame, path)
@@ -114,6 +144,11 @@ def _normalize_file(path: Path) -> tuple[pd.DataFrame, dict[str, object]]:
     normalized["blocks"] = pd.to_numeric(normalized["blocks"], errors="raise").astype(
         "int64"
     )
+    if "payload_bytes" not in normalized:
+        normalized["payload_bytes"] = pd.NA
+    normalized["payload_bytes"] = pd.to_numeric(
+        normalized["payload_bytes"], errors="coerce"
+    ).astype("Int64")
     normalized["bytes_per_second"] = pd.to_numeric(
         normalized["bytes_per_second"], errors="raise"
     )
@@ -144,6 +179,7 @@ def load_benchmark_results(result_dir: str | Path) -> pd.DataFrame:
             "memory_mode",
             "bit_width",
             "blocks",
+            "payload_bytes",
             "implementation",
         ],
         ignore_index=True,
@@ -159,7 +195,7 @@ def load_benchmark_contexts(result_dir: str | Path) -> pd.DataFrame:
         implementation = (
             "cp2k"
             if path.name == "benchmark_cp2k_results.json"
-            else PERNIX_RESULT_RE.fullmatch(path.name).group("implementation")  # type: ignore[union-attr]
+            else (PCIE_RESULT_RE.fullmatch(path.name) or PERNIX_RESULT_RE.fullmatch(path.name)).group("implementation")  # type: ignore[union-attr]
         )
         rows.append(
             {
@@ -174,6 +210,7 @@ def load_benchmark_contexts(result_dir: str | Path) -> pd.DataFrame:
 __all__ = [
     "CP2K_BENCHMARK_RE",
     "PERNIX_BENCHMARK_RE",
+    "PCIE_BENCHMARK_RE",
     "load_benchmark_contexts",
     "load_benchmark_results",
 ]

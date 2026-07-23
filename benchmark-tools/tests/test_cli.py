@@ -28,6 +28,15 @@ def test_run_cp2k_command_is_registered_with_shared_options() -> None:
     assert callable(args.handler)
 
 
+def test_run_pcie_command_is_registered_with_shared_options() -> None:
+    args = build_parser().parse_args(["run", "pcie", "avx2", "--clean"])
+
+    assert args.benchmark == "pcie"
+    assert args.variant == "avx2"
+    assert args.clean is True
+    assert callable(args.handler)
+
+
 def test_bare_run_dispatches_all_benchmarks() -> None:
     with patch("pernix_benchmark_tools.__main__.run_all", return_value=0) as run:
         result = main(["run", "--jobs", "3"])
@@ -117,6 +126,16 @@ def test_main_dispatches_pernix_options() -> None:
     assert variant == "bmi2"
     assert options.build_type == "Debug"
     assert options.output_dir == "results"
+
+
+def test_main_dispatches_pcie_options() -> None:
+    with patch("pernix_benchmark_tools.__main__.run_pcie", return_value=0) as run:
+        result = main(["run", "pcie", "bmi2", "--benchmark-min-time", "0.5"])
+
+    assert result == 0
+    variant, options = run.call_args.args
+    assert variant == "bmi2"
+    assert options.benchmark_min_time == 0.5
 
 
 def test_main_returns_one_for_runtime_error() -> None:

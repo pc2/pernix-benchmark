@@ -8,7 +8,7 @@ from collections.abc import Sequence
 
 from rich.logging import RichHandler
 
-from .runner import PERNIX_VARIANTS, RunOptions, run_all, run_cp2k, run_pernix
+from .runner import PERNIX_VARIANTS, RunOptions, run_all, run_cp2k, run_pcie, run_pernix
 
 logging.basicConfig(
     level=logging.INFO,
@@ -110,6 +110,10 @@ def _handle_cp2k(args: argparse.Namespace) -> int:
     return run_cp2k(_options(args))
 
 
+def _handle_pcie(args: argparse.Namespace) -> int:
+    return run_pcie(args.variant, _options(args))
+
+
 def _handle_all(args: argparse.Namespace) -> int:
     return run_all(_options(args))
 
@@ -144,6 +148,14 @@ def build_parser() -> argparse.ArgumentParser:
     cp2k_parser = run_commands.add_parser("cp2k", help="Run CP2K benchmarks.")
     _add_run_options(cp2k_parser, suppress_defaults=True)
     cp2k_parser.set_defaults(handler=_handle_cp2k)
+
+    pcie_parser = run_commands.add_parser(
+        "pcie", help="Run CUDA PCIe end-to-end Pernix benchmarks on x86.")
+    pcie_parser.add_argument(
+        "variant", nargs="?", choices=PERNIX_VARIANTS,
+        help="Run only this x86 Pernix implementation.")
+    _add_run_options(pcie_parser, suppress_defaults=True)
+    pcie_parser.set_defaults(handler=_handle_pcie)
 
     return parser
 
