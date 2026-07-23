@@ -33,7 +33,7 @@ module load tools/googlebenchmark/1.9.4-GCCcore-14.3.0
 module load devel/CMake/4.2.1-GCCcore-15.2.0
 module load lang/Python/3.14.2-GCCcore-15.2.0
 module load compiler/GCC/15.2.0
-module load CUDA
+module load system/CUDA/13.2.0
 
 cleanup() { rm -rf -- "${BUILD_DIR}"; }
 trap cleanup EXIT
