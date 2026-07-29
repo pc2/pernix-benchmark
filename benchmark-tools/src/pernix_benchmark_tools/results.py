@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
+from typing import Literal
 
 import pandas as pd  # type: ignore[import-untyped]
 
@@ -30,6 +31,7 @@ PCIE_BENCHMARK_RE = re.compile(
 PCIE_RESULT_RE = re.compile(
     r"^benchmark_pcie_(?P<implementation>[A-Za-z0-9]+)_results\.json$"
 )
+ResultFamily = Literal["kernel", "pcie"]
 
 
 def _read_result(path: Path) -> tuple[pd.DataFrame, dict[str, object]]:
@@ -156,22 +158,36 @@ def _normalize_file(path: Path) -> tuple[pd.DataFrame, dict[str, object]]:
     return normalized, context
 
 
-def _result_files(result_dir: str | Path) -> list[Path]:
+def _result_files(
+    result_dir: str | Path,
+    family: ResultFamily | None = None,
+) -> list[Path]:
     directory = Path(result_dir).expanduser().resolve()
     if not directory.is_dir():
         raise FileNotFoundError(
             f"Benchmark result directory does not exist: {directory}"
         )
     files = sorted(directory.glob("benchmark_*_results.json"))
+    if family == "kernel":
+        files = [path for path in files if PCIE_RESULT_RE.fullmatch(path.name) is None]
+    elif family == "pcie":
+        files = [path for path in files if PCIE_RESULT_RE.fullmatch(path.name) is not None]
     if not files:
-        raise FileNotFoundError(f"No benchmark result JSON files found in {directory}")
+        description = f"{family} benchmark " if family is not None else "benchmark "
+        raise FileNotFoundError(f"No {description}result JSON files found in {directory}")
     return files
 
 
-def load_benchmark_results(result_dir: str | Path) -> pd.DataFrame:
+def load_benchmark_results(
+    result_dir: str | Path,
+    *,
+    family: ResultFamily | None = None,
+) -> pd.DataFrame:
     """Load all supported result files into one normalized dataframe."""
 
-    frames = [_normalize_file(path)[0] for path in _result_files(result_dir)]
+    frames = [
+        _normalize_file(path)[0] for path in _result_files(result_dir, family=family)
+    ]
     return pd.concat(frames, ignore_index=True).sort_values(
         [
             "direction",
@@ -186,11 +202,15 @@ def load_benchmark_results(result_dir: str | Path) -> pd.DataFrame:
     )
 
 
-def load_benchmark_contexts(result_dir: str | Path) -> pd.DataFrame:
+def load_benchmark_contexts(
+    result_dir: str | Path,
+    *,
+    family: ResultFamily | None = None,
+) -> pd.DataFrame:
     """Load one flattened Google Benchmark context row per result file."""
 
     rows: list[dict[str, object]] = []
-    for path in _result_files(result_dir):
+    for path in _result_files(result_dir, family=family):
         _, context = _normalize_file(path)
         implementation = (
             "cp2k"

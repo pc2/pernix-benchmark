@@ -117,6 +117,32 @@ def test_loads_and_normalizes_pcie_results(tmp_path: Path) -> None:
     assert d2h["direction"] == "decompression"
     assert d2h["payload_bytes"] == 67108864
 
+
+def test_filters_result_files_by_benchmark_family(tmp_path: Path) -> None:
+    _write_result(
+        tmp_path / "benchmark_pernix_avx2_results.json",
+        ["BM_compress_avx2f32_true_8/16"],
+    )
+    _write_result(
+        tmp_path / "benchmark_pcie_avx2_results.json",
+        ["BM_pcie_h2d_avx2f32_8/4096"],
+    )
+
+    kernel = load_benchmark_results(tmp_path, family="kernel")
+    pcie = load_benchmark_results(tmp_path, family="pcie")
+    kernel_contexts = load_benchmark_contexts(tmp_path, family="kernel")
+    pcie_contexts = load_benchmark_contexts(tmp_path, family="pcie")
+
+    assert set(kernel["benchmark_schema"]) == {"pernix_v1"}
+    assert set(pcie["benchmark_schema"]) == {"pcie_v1"}
+    assert kernel_contexts["source_file"].tolist() == [
+        "benchmark_pernix_avx2_results.json"
+    ]
+    assert pcie_contexts["source_file"].tolist() == [
+        "benchmark_pcie_avx2_results.json"
+    ]
+
+
 def test_loads_one_flattened_context_per_result_file(tmp_path: Path) -> None:
     _write_result(
         tmp_path / "benchmark_pernix_bmi2_results.json",
