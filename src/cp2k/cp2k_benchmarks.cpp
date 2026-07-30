@@ -15,11 +15,16 @@ class BenchmarkCompressorCP2K : public BenchmarkCompressor<BIT_WIDTH, DISABLE_ME
     static_assert(std::is_same_v<ValueT, float> || std::is_same_v<ValueT, double>);
 
 public:
-    int compress(const ValueT* input, const ValueT scale, std::uint8_t* output) override {
-        if constexpr (std::is_same_v<ValueT, float>) {
-            cp2k_compress_block_f32(input, scale, reinterpret_cast<std::int64_t*>(output), BIT_WIDTH);
-        } else {
-            cp2k_compress_block_f64(input, scale, reinterpret_cast<std::int64_t*>(output), BIT_WIDTH);
+    int compress_blocks(const ValueT* input, const ValueT scale, std::uint8_t* output, const std::uint32_t blocks) override {
+        constexpr std::size_t elements_per_block = 512 / BIT_WIDTH;
+        for (std::uint32_t block = 0; block < blocks; ++block) {
+            if constexpr (std::is_same_v<ValueT, float>) {
+                cp2k_compress_block_f32(input, scale, reinterpret_cast<std::int64_t*>(output), BIT_WIDTH);
+            } else {
+                cp2k_compress_block_f64(input, scale, reinterpret_cast<std::int64_t*>(output), BIT_WIDTH);
+            }
+            input += elements_per_block;
+            output += 64;
         }
         return 0;
     }
@@ -30,11 +35,16 @@ class BenchmarkDecompressorCP2K : public BenchmarkDecompressor<BIT_WIDTH, true, 
     static_assert(std::is_same_v<ValueT, float> || std::is_same_v<ValueT, double>);
 
 public:
-    int decompress(const std::uint8_t* input, const ValueT scale, ValueT* output) override {
-        if constexpr (std::is_same_v<ValueT, float>) {
-            cp2k_decompress_block_f32(reinterpret_cast<const std::int64_t*>(input), scale, output, BIT_WIDTH);
-        } else {
-            cp2k_decompress_block_f64(reinterpret_cast<const std::int64_t*>(input), scale, output, BIT_WIDTH);
+    int decompress_blocks(const std::uint8_t* input, const ValueT scale, ValueT* output, const std::uint32_t blocks) override {
+        constexpr std::size_t elements_per_block = 512 / BIT_WIDTH;
+        for (std::uint32_t block = 0; block < blocks; ++block) {
+            if constexpr (std::is_same_v<ValueT, float>) {
+                cp2k_decompress_block_f32(reinterpret_cast<const std::int64_t*>(input), scale, output, BIT_WIDTH);
+            } else {
+                cp2k_decompress_block_f64(reinterpret_cast<const std::int64_t*>(input), scale, output, BIT_WIDTH);
+            }
+            input += 64;
+            output += elements_per_block;
         }
         return 0;
     }

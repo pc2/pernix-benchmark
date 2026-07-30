@@ -4,8 +4,8 @@
 template<uint8_t BIT_WIDTH, bool DISABLE_MEM, typename ValueT>
 class BenchmarkCompressorFALLBACK : public BenchmarkCompressor<BIT_WIDTH, DISABLE_MEM, ValueT> {
 public:
-    int compress(const ValueT *input, const ValueT scale, uint8_t *output) override {
-        return pernix::compress_block_fallback<BIT_WIDTH, 64>(input, scale, output);
+    int compress_blocks(const ValueT *input, const ValueT scale, uint8_t *output, const uint32_t blocks) override {
+        return pernix::compress_blocks_fallback<BIT_WIDTH, 64>(input, scale, output, blocks);
     }
 };
 

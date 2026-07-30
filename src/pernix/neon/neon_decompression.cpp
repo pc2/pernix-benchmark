@@ -4,8 +4,8 @@
 template<uint8_t BIT_WIDTH, bool DISABLE_MEM, typename ValueT>
 class BenchmarkDecompressorNEON : public BenchmarkDecompressor<BIT_WIDTH, true, DISABLE_MEM, ValueT> {
 public:
-    int decompress(const uint8_t *input, const ValueT scale, ValueT *output) override {
-        return pernix::arm64::neon::neon_decompress_block<BIT_WIDTH, true, 64>(input, scale, output);
+    int decompress_blocks(const uint8_t *input, const ValueT scale, ValueT *output, const uint32_t blocks) override {
+        return pernix::arm64::neon::neon_decompress_blocks<BIT_WIDTH, true, 64>(input, scale, output, blocks);
     }
 };
 

@@ -4,8 +4,8 @@
 template<uint8_t BIT_WIDTH, bool DISABLE_MEM, typename ValueT>
 class BenchmarkCompressorAVX512VBMI : public BenchmarkCompressor<BIT_WIDTH, DISABLE_MEM, ValueT> {
 public:
-    __always_inline int compress(const ValueT *input, const ValueT scale, uint8_t *output) override {
-        return pernix::mm512_compress_block_avx512vbmi<BIT_WIDTH, 64>(input, scale, output);
+    int compress_blocks(const ValueT *input, const ValueT scale, uint8_t *output, const uint32_t blocks) override {
+        return pernix::mm512_compress_blocks_avx512vbmi<BIT_WIDTH, 64>(input, scale, output, blocks);
     }
 };
 

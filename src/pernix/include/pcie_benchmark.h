@@ -73,17 +73,17 @@ struct Fixture {
     PinnedBuffer<ValueT> input;
     PinnedBuffer<std::uint8_t> packed;
     PinnedBuffer<ValueT> output;
-    std::vector<ValueT> scales;
+    ValueT scale;
     DeviceBuffer device;
 
     explicit Fixture(const std::size_t payload)
         : blocks(payload / kBlockBytes), payload_bytes(payload), input(blocks * kElementsPerBlock),
-          packed(payload), output(blocks * kElementsPerBlock), scales(blocks), device(payload) {
+          packed(payload), output(blocks * kElementsPerBlock), device(payload) {
         std::mt19937 generator(0xC0FFEE);
         std::uniform_real_distribution<ValueT> input_distribution(static_cast<ValueT>(-1), static_cast<ValueT>(1));
         std::uniform_real_distribution<ValueT> scale_distribution(static_cast<ValueT>(0.0001), static_cast<ValueT>(1));
         for (std::size_t index = 0; index < blocks * kElementsPerBlock; ++index) input.data()[index] = input_distribution(generator);
-        for (ValueT& scale : scales) scale = scale_distribution(generator);
+        scale = scale_distribution(generator);
     }
 
     std::size_t useful_bytes() const { return blocks * kElementsPerBlock * sizeof(ValueT); }
@@ -110,10 +110,8 @@ void BM_pcie_h2d(benchmark::State& state) {
     double sum = 0;
     Compressor compressor;
     for (auto _ : state) {
-        for (std::size_t block = 0; block < fixture.blocks; ++block) {
-            compressor.template operator()<BIT_WIDTH>(fixture.input.data() + block * Fixture<BIT_WIDTH, ValueT>::kElementsPerBlock,
-                                                       fixture.scales[block], fixture.packed.data() + block * kBlockBytes);
-        }
+        compressor.template operator()<BIT_WIDTH>(fixture.input.data(), fixture.scale, fixture.packed.data(),
+                                                   static_cast<std::uint32_t>(fixture.blocks));
         check_cuda(cudaEventRecord(start.get()), "cudaEventRecord H2D start");
         check_cuda(cudaMemcpyAsync(fixture.device.data(), fixture.packed.data(), fixture.payload_bytes, cudaMemcpyHostToDevice), "cudaMemcpyAsync H2D");
         check_cuda(cudaEventRecord(stop.get()), "cudaEventRecord H2D stop");
@@ -146,10 +144,8 @@ void BM_pcie_d2h(benchmark::State& state) {
         float elapsed = 0;
         check_cuda(cudaEventElapsedTime(&elapsed, start.get(), stop.get()), "cudaEventElapsedTime D2H");
         dma_milliseconds += elapsed;
-        for (std::size_t block = 0; block < fixture.blocks; ++block) {
-            decompressor.template operator()<BIT_WIDTH>(fixture.packed.data() + block * kBlockBytes, fixture.scales[block],
-                                                         fixture.output.data() + block * Fixture<BIT_WIDTH, ValueT>::kElementsPerBlock);
-        }
+        decompressor.template operator()<BIT_WIDTH>(fixture.packed.data(), fixture.scale, fixture.output.data(),
+                                                     static_cast<std::uint32_t>(fixture.blocks));
         sum += fixture.output.data()[0];
         benchmark::DoNotOptimize(sum);
         benchmark::ClobberMemory();

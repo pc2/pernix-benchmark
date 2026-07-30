@@ -5,8 +5,8 @@
 template<uint8_t BIT_WIDTH, bool DISABLE_MEM, typename ValueT>
 class BenchmarkDecompressorAVX2 : public BenchmarkDecompressor<BIT_WIDTH, true, DISABLE_MEM, ValueT> {
 public:
-    int decompress(const uint8_t *input, const ValueT scale, ValueT *output) override {
-        return pernix::mm256_decompress_block_avx2<BIT_WIDTH, true, 64>(input, scale, output);
+    int decompress_blocks(const uint8_t *input, const ValueT scale, ValueT *output, const uint32_t blocks) override {
+        return pernix::mm256_decompress_blocks_avx2<BIT_WIDTH, true, 64>(input, scale, output, blocks);
     }
 };
 

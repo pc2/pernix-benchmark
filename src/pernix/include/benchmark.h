@@ -4,6 +4,7 @@
 #include <benchmark/benchmark.h>
 #include <pernix/simd_compat.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <cstdint>
@@ -26,7 +27,7 @@ struct DecompressionBenchmarkSet {
 
     alignas(64) uint8_t *input_ptr = nullptr;
     alignas(64) ValueT *output_ptr = nullptr;
-    std::vector<ValueT> scales{};
+    ValueT scale{};
 
     ~DecompressionBenchmarkSet() {
         if (input_ptr) std::free(input_ptr);
@@ -49,11 +50,7 @@ struct DecompressionBenchmarkSet {
         output_ptr = static_cast<ValueT *>(std::aligned_alloc(64, out_bytes));
         if (!input_ptr || !output_ptr) std::abort();
 
-        scales.resize(number_of_blocks);
-
-        for (auto &scale: scales) {
-            scale = scale_dis(gen);
-        }
+        scale = scale_dis(gen);
 
         for (int64_t i = 0; i < (64u * number_of_blocks); ++i) {
             input_ptr[i] = static_cast<uint8_t>(dis(gen));
@@ -68,7 +65,7 @@ struct CompressionBenchmarkSet {
 
     alignas(64) ValueT *input_ptr = nullptr;
     alignas(64) uint8_t *output_ptr = nullptr;
-    std::vector<ValueT> scales{};
+    ValueT scale{};
 
     ~CompressionBenchmarkSet() {
         if (input_ptr) std::free(input_ptr);
@@ -91,11 +88,7 @@ struct CompressionBenchmarkSet {
         input_ptr = static_cast<ValueT *>(std::aligned_alloc(64, in_bytes));
         if (!output_ptr || !input_ptr) std::abort();
 
-        scales.resize(number_of_blocks);
-
-        for (auto &scale: scales) {
-            scale = scale_dis(gen);
-        }
+        scale = scale_dis(gen);
 
         for (int64_t i = 0; i < (number_of_blocks * elements_per_block); ++i) {
             input_ptr[i] = dis(gen);
@@ -108,7 +101,7 @@ class BenchmarkDecompressor {
 public:
     virtual ~BenchmarkDecompressor() = default;
 
-    __always_inline virtual int decompress(const uint8_t *, ValueT, ValueT *) = 0;
+    virtual int decompress_blocks(const uint8_t *, ValueT, ValueT *, uint32_t) = 0;
 };
 
 template<uint8_t BIT_WIDTH, bool DISABLE_MEM, typename ValueT>
@@ -116,7 +109,7 @@ class BenchmarkCompressor {
 public:
     virtual ~BenchmarkCompressor() = default;
 
-    __always_inline virtual int compress(const ValueT *, ValueT, uint8_t *) = 0;
+    virtual int compress_blocks(const ValueT *, ValueT, uint8_t *, uint32_t) = 0;
 };
 
 #define BENCHMARK_DECOMPRESS_BLOCKS_REGISTER(name) \
@@ -139,34 +132,29 @@ __always_inline void BM_decompress_blocks(benchmark::State &state) {
     const size_t bytes_read_per_block = (elements_per_block * BIT_WIDTH + 7) / 8;
     const size_t bytes_written_per_block = elements_per_block * sizeof(ValueT);
 
+    constexpr size_t core_batch_blocks = 1024;
     double sum = 0;
     if constexpr (DISABLE_MEM) {
-        alignas(64) thread_local uint8_t dummy_input[64] = {0};
-        alignas(64) thread_local ValueT dummy_output[elements_per_block * 1] = {0};
+        const size_t batch_blocks = std::min(number_of_blocks, core_batch_blocks);
+        DecompressionBenchmarkSet<BIT_WIDTH, ValueT> core_set(batch_blocks);
         thread_local ValueT scale = static_cast<ValueT>(1.0);
 
         for (auto _: state) {
-            for (uint32_t block = 0; block < number_of_blocks; block++) {
-                decompressor->decompress(dummy_input, scale, dummy_output);
-                sum += dummy_output[0];
-                asm volatile("" ::"r"(dummy_input), "r"(dummy_output));
+            for (size_t processed = 0; processed < number_of_blocks; processed += batch_blocks) {
+                const auto blocks_this_call = static_cast<uint32_t>(std::min(batch_blocks, number_of_blocks - processed));
+                decompressor->decompress_blocks(core_set.input_ptr, scale, core_set.output_ptr, blocks_this_call);
+                sum += core_set.output_ptr[0];
+                asm volatile("" ::"r"(core_set.input_ptr), "r"(core_set.output_ptr));
             }
         }
     } else {
         for (auto _: state) {
-            alignas(64) const uint8_t *block_input = benchmark_set->input_ptr;
-            alignas(64) ValueT *block_output = benchmark_set->output_ptr;
-
-            for (uint32_t block = 0; block < number_of_blocks; block++) {
-                decompressor->decompress(block_input, benchmark_set->scales[block], block_output);
-                benchmark::DoNotOptimize(block_input);
-                benchmark::DoNotOptimize(benchmark_set->scales.data());
-                benchmark::DoNotOptimize(block_output);
-                block_input += 64;
-                block_output += elements_per_block;
-                sum += block_output[0];
-                benchmark::ClobberMemory();
-            }
+            decompressor->decompress_blocks(benchmark_set->input_ptr, benchmark_set->scale, benchmark_set->output_ptr,
+                                             static_cast<uint32_t>(number_of_blocks));
+            sum += benchmark_set->output_ptr[0];
+            benchmark::DoNotOptimize(benchmark_set->input_ptr);
+            benchmark::DoNotOptimize(benchmark_set->output_ptr);
+            benchmark::ClobberMemory();
         }
     }
     const auto iters = static_cast<uint64_t>(state.iterations());
@@ -197,34 +185,29 @@ __always_inline void BM_compress_blocks(benchmark::State &state) {
     const size_t bytes_read_per_block = elements_per_block * sizeof(ValueT);
     const size_t bytes_written_per_block = (elements_per_block * BIT_WIDTH + 7) / 8;
 
+    constexpr size_t core_batch_blocks = 1024;
     uint64_t sum = 0;
     if constexpr (DISABLE_MEM) {
-        alignas(64) thread_local ValueT dummy_input[elements_per_block * 1] = {0};
-        alignas(64) thread_local uint8_t dummy_output[64] = {0};
+        const size_t batch_blocks = std::min(number_of_blocks, core_batch_blocks);
+        CompressionBenchmarkSet<BIT_WIDTH, ValueT> core_set(batch_blocks);
         thread_local auto scale = static_cast<ValueT>(1.0);
 
         for (auto _: state) {
-            for (uint32_t block = 0; block < number_of_blocks; block++) {
-                compressor->compress(dummy_input, scale, dummy_output);
-                sum += dummy_output[0];
-                asm volatile("" ::"r"(dummy_input), "r"(dummy_output));
+            for (size_t processed = 0; processed < number_of_blocks; processed += batch_blocks) {
+                const auto blocks_this_call = static_cast<uint32_t>(std::min(batch_blocks, number_of_blocks - processed));
+                compressor->compress_blocks(core_set.input_ptr, scale, core_set.output_ptr, blocks_this_call);
+                sum += core_set.output_ptr[0];
+                asm volatile("" ::"r"(core_set.input_ptr), "r"(core_set.output_ptr));
             }
         }
     } else {
         for (auto _: state) {
-            alignas(64) const ValueT *block_input = benchmark_set->input_ptr;
-            alignas(64) uint8_t *block_output = benchmark_set->output_ptr;
-
-            for (uint32_t block = 0; block < number_of_blocks; block++) {
-                compressor->compress(block_input, benchmark_set->scales[block], block_output);
-                benchmark::DoNotOptimize(block_input);
-                benchmark::DoNotOptimize(benchmark_set->scales.data());
-                benchmark::DoNotOptimize(block_output);
-                block_input += elements_per_block;
-                block_output += 64;
-                sum += block_output[0];
-                benchmark::ClobberMemory();
-            }
+            compressor->compress_blocks(benchmark_set->input_ptr, benchmark_set->scale, benchmark_set->output_ptr,
+                                        static_cast<uint32_t>(number_of_blocks));
+            sum += benchmark_set->output_ptr[0];
+            benchmark::DoNotOptimize(benchmark_set->input_ptr);
+            benchmark::DoNotOptimize(benchmark_set->output_ptr);
+            benchmark::ClobberMemory();
         }
     }
 

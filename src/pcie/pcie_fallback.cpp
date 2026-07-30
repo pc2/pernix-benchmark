@@ -2,8 +2,8 @@
 #include <pernix/fallback/scalar_compression.h>
 #include <pernix/fallback/scalar_decompression.h>
 
-struct FallbackCompressor { template <std::uint8_t Width, typename T> int operator()(const T* input, T scale, std::uint8_t* output) const { return pernix::compress_block_fallback<Width, 64>(input, scale, output); } };
-struct FallbackDecompressor { template <std::uint8_t Width, typename T> int operator()(const std::uint8_t* input, T scale, T* output) const { return pernix::decompress_block_fallback<Width, true, 64>(input, scale, output); } };
+struct FallbackCompressor { template <std::uint8_t Width, typename T> int operator()(const T* input, T scale, std::uint8_t* output, std::uint32_t blocks) const { return pernix::compress_blocks_fallback<Width, 64>(input, scale, output, blocks); } };
+struct FallbackDecompressor { template <std::uint8_t Width, typename T> int operator()(const std::uint8_t* input, T scale, T* output, std::uint32_t blocks) const { return pernix::decompress_blocks_fallback<Width, true, 64>(input, scale, output, blocks); } };
 
 #define REGISTER(W, T, TAG) \
     static void BM_pcie_h2d_##TAG##_##W(benchmark::State& s) { pernix_benchmark::pcie::BM_pcie_h2d<W, T, FallbackCompressor>(s); } \
