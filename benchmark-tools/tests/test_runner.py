@@ -140,6 +140,76 @@ def test_run_pcie_rejects_non_x86_hosts() -> None:
         run_pcie(None, RunOptions(), host=HostCapabilities("arm64", frozenset({"asimd"})))
 
 
+def test_slurm_progress_reports_completed_count_and_current_target() -> None:
+    from pernix_benchmark_tools import runner
+
+    with (
+        patch.dict("os.environ", {"SLURM_JOB_ID": "12345"}, clear=True),
+        patch.object(runner.subprocess, "run") as run,
+    ):
+        runner._report_slurm_progress(
+            1,
+            4,
+            current="pernix_avx2",
+            elapsed_seconds=754,
+            remaining_seconds=2262,
+        )
+
+    run.assert_called_once_with(
+        [
+            "scontrol",
+            "update",
+            "JobId=12345",
+            "Comment=1/4 (Current: AVX2) [00:12:34<00:37:42]",
+        ],
+        check=False,
+    )
+
+
+def test_slurm_progress_reports_completion() -> None:
+    from pernix_benchmark_tools import runner
+
+    with (
+        patch.dict("os.environ", {"SLURM_JOB_ID": "12345"}, clear=True),
+        patch.object(runner.subprocess, "run") as run,
+    ):
+        runner._report_slurm_progress(4, 4, elapsed_seconds=45296)
+
+    assert run.call_args.args[0][-1] == "Comment=4/4 (Complete) [12:34:56]"
+
+
+def test_slurm_progress_is_disabled_outside_slurm() -> None:
+    from pernix_benchmark_tools import runner
+
+    with (
+        patch.dict("os.environ", {}, clear=True),
+        patch.object(runner.subprocess, "run") as run,
+    ):
+        runner._report_slurm_progress(1, 4, current="pernix_avx2")
+
+    run.assert_not_called()
+
+
+def test_slurm_progress_uses_unknown_eta_before_first_target() -> None:
+    from pernix_benchmark_tools import runner
+
+    with (
+        patch.dict("os.environ", {"SLURM_JOB_ID": "12345"}, clear=True),
+        patch.object(runner.subprocess, "run") as run,
+    ):
+        runner._report_slurm_progress(
+            0,
+            4,
+            current="pernix_fallback",
+            elapsed_seconds=0.4,
+        )
+
+    assert (
+        run.call_args.args[0][-1]
+        == "Comment=0/4 (Current: FALLBACK) [00:00:00<?]"
+    )
+
+
 def test_run_targets_configures_once_and_runs_each_executable(tmp_path: Path) -> None:
     from pernix_benchmark_tools import runner
 

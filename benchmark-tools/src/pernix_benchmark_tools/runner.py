@@ -5,6 +5,7 @@ import os
 import platform
 import re
 import subprocess
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -181,7 +182,9 @@ def _collect_machine_state(repository: Path, output_dir: Path) -> None:
     try:
         subprocess.run(command, cwd=repository, check=True)
     except (OSError, subprocess.CalledProcessError) as error:
-        logger.warning("MachineState collection failed; continuing without it: %s", error)
+        logger.warning(
+            "MachineState collection failed; continuing without it: %s", error
+        )
         try:
             output_file.unlink(missing_ok=True)
         except OSError as cleanup_error:
@@ -190,6 +193,62 @@ def _collect_machine_state(repository: Path, output_dir: Path) -> None:
                 output_file,
                 cleanup_error,
             )
+
+
+def _target_display_name(target: str) -> str:
+    for prefix in ("pernix_", "pcie_"):
+        if target.startswith(prefix):
+            target = target.removeprefix(prefix)
+            break
+    return target.upper()
+
+
+def _format_duration(seconds: float) -> str:
+    total_seconds = max(0, int(seconds))
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+
+def _report_slurm_progress(
+    completed: int,
+    total: int,
+    *,
+    current: str | None = None,
+    elapsed_seconds: float = 0,
+    remaining_seconds: float | None = None,
+) -> None:
+    job_id = os.environ.get("SLURM_JOB_ID")
+    if not job_id:
+        return
+
+    status = (
+        f"{completed}/{total} (Current: {_target_display_name(current)})"
+        if current is not None
+        else f"{completed}/{total} (Complete)"
+    )
+    elapsed = _format_duration(elapsed_seconds)
+    if current is None:
+        comment = f"{status} [{elapsed}]"
+    else:
+        remaining = (
+            _format_duration(remaining_seconds)
+            if remaining_seconds is not None
+            else "?"
+        )
+        comment = f"{status} [{elapsed}<{remaining}]"
+    try:
+        subprocess.run(
+            [
+                "scontrol",
+                "update",
+                f"JobId={job_id}",
+                f"Comment={comment}",
+            ],
+            check=False,
+        )
+    except OSError as error:
+        logger.warning("Could not update SLURM job progress: %s", error)
 
 
 def _run_targets(targets: tuple[str, ...], options: RunOptions) -> Path:
@@ -211,7 +270,20 @@ def _run_targets(targets: tuple[str, ...], options: RunOptions) -> Path:
 
     _collect_machine_state(repository, output_dir)
 
-    for target, executable in built_targets:
+    total_targets = len(built_targets)
+    progress_started = time.monotonic()
+    for index, (target, executable) in enumerate(built_targets):
+        elapsed_seconds = time.monotonic() - progress_started
+        remaining_seconds = (
+            elapsed_seconds / index * (total_targets - index) if index > 0 else None
+        )
+        _report_slurm_progress(
+            index,
+            total_targets,
+            current=target,
+            elapsed_seconds=elapsed_seconds,
+            remaining_seconds=remaining_seconds,
+        )
         output_file = output_dir / f"benchmark_{target}_results.json"
         command = [
             str(executable),
@@ -225,6 +297,11 @@ def _run_targets(targets: tuple[str, ...], options: RunOptions) -> Path:
         subprocess.run(command, cwd=project.build_dir, check=True)
         logger.info("Results saved to %s", output_file)
 
+    _report_slurm_progress(
+        total_targets,
+        total_targets,
+        elapsed_seconds=time.monotonic() - progress_started,
+    )
     logger.info("Benchmark results directory: %s", output_dir)
     return output_dir
 
@@ -254,7 +331,9 @@ def run_pcie(
 ) -> int:
     detected = host or detect_host()
     if detected.architecture != "x86":
-        raise RuntimeError("CUDA PCIe benchmarks currently support x86 Pernix implementations only")
+        raise RuntimeError(
+            "CUDA PCIe benchmarks currently support x86 Pernix implementations only"
+        )
     selected = select_pernix_variants(variant, detected)
     cuda_options = RunOptions(
         compiler=options.compiler,
