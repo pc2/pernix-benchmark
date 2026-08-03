@@ -17,6 +17,11 @@ set(CMAKE_CXX_STANDARD ${BENCHMARK_CXX_STANDARD})
 set(CMAKE_CXX_STANDARD_REQUIRED YES)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+add_library(pernix_benchmark_optimization INTERFACE)
+target_compile_options(pernix_benchmark_optimization INTERFACE
+        $<$<COMPILE_LANGUAGE:C,CXX,Fortran>:-O3>
+)
+
 add_subdirectory(external)
 
 add_subdirectory(src)

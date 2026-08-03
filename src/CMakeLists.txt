@@ -46,10 +46,12 @@ function(add_pernix_benchmark variant compile_opts)
     message(STATUS ${SOURCE_FILES})
 
     add_executable(bench_pernix_${variant} main.cpp ${SOURCE_FILES})
-    target_link_libraries(bench_pernix_${variant} PRIVATE ${BENCHMARK_LDFLAGS})
+    target_link_libraries(bench_pernix_${variant} PRIVATE
+            pernix_benchmark_optimization
+            ${BENCHMARK_LDFLAGS})
     if (PERNIX_BENCHMARK_USE_SIMDE)
         target_compile_definitions(bench_pernix_${variant} PRIVATE PERNIX_USE_SIMDE=1)
-        target_compile_options(bench_pernix_${variant} PRIVATE -g -v ${BENCHMARK_CFLAGS})
+        target_compile_options(bench_pernix_${variant} PRIVATE -g ${BENCHMARK_CFLAGS})
         target_include_directories(bench_pernix_${variant} PRIVATE ${PERNIX_BENCHMARK_SIMDE_INCLUDE_DIRS})
     else ()
         target_compile_options(bench_pernix_${variant} PRIVATE ${compile_opts} ${ARGN} ${BENCHMARK_CFLAGS})
@@ -60,36 +62,41 @@ endfunction()
 
 function(add_pernix_pcie_benchmark variant compile_opts)
     add_executable(bench_pcie_${variant} main.cpp pcie/pcie_${variant}.cpp)
-    target_link_libraries(bench_pcie_${variant} PRIVATE ${BENCHMARK_LDFLAGS} CUDA::cudart)
+    target_link_libraries(bench_pcie_${variant} PRIVATE
+            pernix_benchmark_optimization
+            ${BENCHMARK_LDFLAGS}
+            CUDA::cudart)
     target_compile_options(bench_pcie_${variant} PRIVATE ${compile_opts} ${ARGN} ${BENCHMARK_CFLAGS})
     target_include_directories(bench_pcie_${variant} PRIVATE
             ${CMAKE_SOURCE_DIR}/external/pernix/include
             pernix/include)
 endfunction()
 if (PERNIX_BENCHMARK_USE_SIMDE OR PERNIX_BENCHMARK_TARGET_IS_X86)
-    add_pernix_benchmark(avx512vbmi -g -v -march=x86-64-v4 -mavx512vbmi)
-    add_pernix_benchmark(avx2 -g -v -march=x86-64-v3)
-    add_pernix_benchmark(bmi2 -g -v -march=x86-64-v3)
+    add_pernix_benchmark(avx512vbmi -g -march=x86-64-v4 -mavx512vbmi)
+    add_pernix_benchmark(avx2 -g -march=x86-64-v3)
+    add_pernix_benchmark(bmi2 -g -march=x86-64-v3)
 endif ()
 if (PERNIX_BENCHMARK_TARGET_IS_ARM64)
-    add_pernix_benchmark(neon -g -v -march=armv8-a+simd)
-    add_pernix_benchmark(sve2 -g -v -march=armv8.2-a+simd+sve2)
+    add_pernix_benchmark(neon -g -march=armv8-a+simd)
+    add_pernix_benchmark(sve2 -g -march=armv8.2-a+simd+sve2)
 endif ()
-add_pernix_benchmark(fallback -g -v)
+add_pernix_benchmark(fallback -g)
 
 if (PERNIX_BENCHMARK_ENABLE_CUDA)
     if (NOT PERNIX_BENCHMARK_TARGET_IS_X86)
         message(FATAL_ERROR "CUDA PCIe benchmarks currently support x86 Pernix implementations only.")
     endif ()
     find_package(CUDAToolkit REQUIRED)
-    add_pernix_pcie_benchmark(fallback -g -v)
-    add_pernix_pcie_benchmark(avx2 -g -v -march=x86-64-v3)
-    add_pernix_pcie_benchmark(bmi2 -g -v -march=x86-64-v3)
-    add_pernix_pcie_benchmark(avx512vbmi -g -v -march=x86-64-v4 -mavx512vbmi)
+    add_pernix_pcie_benchmark(fallback -g)
+    add_pernix_pcie_benchmark(avx2 -g -march=x86-64-v3)
+    add_pernix_pcie_benchmark(bmi2 -g -march=x86-64-v3)
+    add_pernix_pcie_benchmark(avx512vbmi -g -march=x86-64-v4 -mavx512vbmi)
 endif ()
 
 add_library(cp2k_benchmark_adapter STATIC cp2k/cp2k_benchmarks.f90)
-target_link_libraries(cp2k_benchmark_adapter PRIVATE cp2k_compression)
+target_link_libraries(cp2k_benchmark_adapter PRIVATE
+        pernix_benchmark_optimization
+        cp2k_compression)
 target_include_directories(cp2k_benchmark_adapter PRIVATE "${CMAKE_BINARY_DIR}/fortran_modules/cp2k")
 add_dependencies(cp2k_benchmark_adapter cp2k_compression)
 target_compile_options(cp2k_benchmark_adapter PRIVATE
@@ -100,7 +107,10 @@ set_target_properties(cp2k_benchmark_adapter PROPERTIES
 )
 
 add_executable(bench_cp2k main.cpp cp2k/cp2k_benchmarks.cpp)
-target_link_libraries(bench_cp2k PRIVATE ${BENCHMARK_LDFLAGS} cp2k_benchmark_adapter)
+target_link_libraries(bench_cp2k PRIVATE
+        pernix_benchmark_optimization
+        ${BENCHMARK_LDFLAGS}
+        cp2k_benchmark_adapter)
 target_include_directories(bench_cp2k PRIVATE ${CMAKE_SOURCE_DIR}/external/pernix/include)
 target_include_directories(bench_cp2k PRIVATE pernix/include)
 target_compile_options(bench_cp2k PRIVATE ${BENCHMARK_CFLAGS} -g -march=native)

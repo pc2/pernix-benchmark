@@ -11,8 +11,13 @@
 #include <iostream>
 #include <memory>
 #include <random>
+#include <set>
 #include <type_traits>
 #include <vector>
+
+#if defined(__linux__)
+#include <unistd.h>
+#endif
 
 namespace detail {
     inline size_t round_up_to(const size_t n, const size_t align) {
@@ -112,11 +117,47 @@ public:
     virtual int compress_blocks(const ValueT *, ValueT, uint8_t *, uint32_t) = 0;
 };
 
-#define BENCHMARK_DECOMPRESS_BLOCKS_REGISTER(name) \
-    BENCHMARK(BM_##name)->RangeMultiplier(2)->Range(1 << 0, 1 << 22)
+template<uint8_t BIT_WIDTH, typename ValueT, bool DISABLE_MEM>
+void register_block_sizes(benchmark::Benchmark *benchmark) {
+    if constexpr (DISABLE_MEM) {
+        benchmark->RangeMultiplier(2)->Range(1 << 0, 1 << 22);
+        return;
+    }
 
-#define BENCHMARK_COMPRESS_BLOCKS_REGISTER(name) \
-    BENCHMARK(BM_##name)->RangeMultiplier(2)->Range(1 << 0, 1 << 22)
+    constexpr uint64_t elements_per_block = 512 / BIT_WIDTH;
+    constexpr uint64_t bytes_per_block = elements_per_block * sizeof(ValueT) + 64;
+    std::set<int64_t> block_counts;
+    const auto add_target = [&](const double target_bytes) {
+        block_counts.insert(std::max<int64_t>(1, static_cast<int64_t>(target_bytes / bytes_per_block)));
+    };
+
+    // Half-octave targets from 2^12 bytes (4 KiB) through 2^31 bytes (2 GiB).
+    for (int half_exponent = 24; half_exponent <= 62; ++half_exponent) {
+        add_target(std::exp2(static_cast<double>(half_exponent) / 2.0));
+    }
+
+#if defined(__linux__)
+    for (const int cache_query : {
+             _SC_LEVEL1_DCACHE_SIZE,
+             _SC_LEVEL2_CACHE_SIZE,
+             _SC_LEVEL3_CACHE_SIZE,
+         }) {
+        const long cache_bytes = sysconf(cache_query);
+        if (cache_bytes <= 0) continue;
+        add_target(0.75 * static_cast<double>(cache_bytes));
+        add_target(static_cast<double>(cache_bytes));
+        add_target(1.25 * static_cast<double>(cache_bytes));
+    }
+#endif
+
+    for (const int64_t blocks : block_counts) benchmark->Arg(blocks);
+}
+
+#define BENCHMARK_DECOMPRESS_BLOCKS_REGISTER(name, width, memory_mode, value_type) \
+    BENCHMARK(BM_##name)->Apply(register_block_sizes<width, value_type, memory_mode>)
+
+#define BENCHMARK_COMPRESS_BLOCKS_REGISTER(name, width, memory_mode, value_type) \
+    BENCHMARK(BM_##name)->Apply(register_block_sizes<width, value_type, memory_mode>)
 
 
 template<uint8_t BIT_WIDTH, bool SIGN_VALUES, bool DISABLE_MEM, typename ValueT, typename Decompressor>

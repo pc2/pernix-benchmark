@@ -54,11 +54,11 @@ public:
     static void BM_compress_cp2k##TAG##_##MEM##_##N(benchmark::State& state) {                    \
         BM_compress_blocks<N, true, MEM, TYPE, BenchmarkCompressorCP2K<N, MEM, TYPE>>(state);     \
     }                                                                                             \
-    BENCHMARK_COMPRESS_BLOCKS_REGISTER(compress_cp2k##TAG##_##MEM##_##N);                         \
+    BENCHMARK_COMPRESS_BLOCKS_REGISTER(compress_cp2k##TAG##_##MEM##_##N, N, MEM, TYPE);           \
     static void BM_decompress_cp2k##TAG##_##MEM##_##N(benchmark::State& state) {                  \
         BM_decompress_blocks<N, true, MEM, TYPE, BenchmarkDecompressorCP2K<N, MEM, TYPE>>(state); \
     }                                                                                             \
-    BENCHMARK_DECOMPRESS_BLOCKS_REGISTER(decompress_cp2k##TAG##_##MEM##_##N);
+    BENCHMARK_DECOMPRESS_BLOCKS_REGISTER(decompress_cp2k##TAG##_##MEM##_##N, N, MEM, TYPE);
 
 #define BENCHMARK_CP2K_FOR_TYPE(N, TAG, TYPE)    \
     BENCHMARK_CP2K_FOR_MODE(N, TAG, TYPE, true); \

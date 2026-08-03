@@ -13,7 +13,7 @@ public:
 static void BM_compress_##TAG##_##MEM##_##N(benchmark::State& state) { \
 BM_compress_blocks<N, true, MEM, TYPE, BenchmarkCompressorBMI2<N, MEM, TYPE>>(state); \
 }                                                              \
-BENCHMARK_COMPRESS_BLOCKS_REGISTER(compress_##TAG##_##MEM##_##N);
+BENCHMARK_COMPRESS_BLOCKS_REGISTER(compress_##TAG##_##MEM##_##N, N, MEM, TYPE);
 
 #define PERNIX_FOR_EACH_BIT_WIDTH(M, MEM, TYPE, TAG) \
 M(1, MEM, TYPE, TAG); \

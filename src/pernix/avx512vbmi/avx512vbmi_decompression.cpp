@@ -14,7 +14,7 @@ public:
     static void BM_decompress_##TAG##_##MEM##_##N(benchmark::State& state) { \
         BM_decompress_blocks<N, true, MEM, TYPE, BenchmarkDecompressorAVX512VBMI<N, MEM, TYPE>>(state); \
     }                                                              \
-    BENCHMARK_DECOMPRESS_BLOCKS_REGISTER(decompress_##TAG##_##MEM##_##N);
+    BENCHMARK_DECOMPRESS_BLOCKS_REGISTER(decompress_##TAG##_##MEM##_##N, N, MEM, TYPE);
 
 #define PERNIX_FOR_EACH_BIT_WIDTH(M, MEM, TYPE, TAG) \
 M(1, MEM, TYPE, TAG); \
