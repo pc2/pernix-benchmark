@@ -37,6 +37,28 @@ def test_run_pcie_command_is_registered_with_shared_options() -> None:
     assert callable(args.handler)
 
 
+def test_model_command_is_registered() -> None:
+    args = build_parser().parse_args(
+        [
+            "model",
+            "--results-dir",
+            "results",
+            "--llvm-cpu",
+            "znver5",
+            "--likwid-perfctr",
+            "likwid-perfctr",
+            "--probe-min-time",
+            "0.5",
+        ]
+    )
+
+    assert args.command == "model"
+    assert args.results_dir == "results"
+    assert args.llvm_cpu == "znver5"
+    assert args.likwid_perfctr == "likwid-perfctr"
+    assert args.probe_min_time == 0.5
+
+
 def test_bare_run_dispatches_all_benchmarks() -> None:
     with patch("pernix_benchmark_tools.__main__.run_all", return_value=0) as run:
         result = main(["run", "--jobs", "3"])
@@ -45,6 +67,8 @@ def test_bare_run_dispatches_all_benchmarks() -> None:
     options = run.call_args.args[0]
     assert options.jobs == 3
     assert options.benchmark_min_time == 0.25
+    assert options.benchmark_repetitions == 5
+    assert options.benchmark_min_warmup_time == 0.05
 
 
 @pytest.mark.parametrize("command", ["memory", "transform"])
@@ -105,6 +129,22 @@ def test_benchmark_min_time_must_be_positive_and_finite(value: str) -> None:
         build_parser().parse_args(["run", "--benchmark-min-time", value])
 
     assert error.value.code == 2
+
+
+def test_repetitions_and_warmup_are_configurable() -> None:
+    args = build_parser().parse_args(
+        [
+            "run",
+            "--benchmark-repetitions",
+            "7",
+            "--benchmark-min-warmup-time",
+            "0.1",
+            "cp2k",
+        ]
+    )
+
+    assert args.benchmark_repetitions == 7
+    assert args.benchmark_min_warmup_time == 0.1
 
 
 def test_main_dispatches_pernix_options() -> None:

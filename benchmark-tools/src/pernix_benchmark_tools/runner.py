@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
 import platform
@@ -11,6 +12,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .cmake import CMakeProject
+from .model import ModelOptions, generate_incore_models
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +45,8 @@ class RunOptions:
     output_dir: str | None = None
     clean: bool = False
     benchmark_min_time: float = 0.25
+    benchmark_repetitions: int = 5
+    benchmark_min_warmup_time: float = 0.05
     enable_cuda: bool = False
 
 
@@ -195,6 +199,48 @@ def _collect_machine_state(repository: Path, output_dir: Path) -> None:
             )
 
 
+def _collect_pcie_state(output_dir: Path, compiler: str) -> None:
+    """Record the accelerator and negotiated PCIe link used by a CUDA run."""
+
+    query = [
+        "nvidia-smi",
+        "--query-gpu=name,pcie.link.gen.current,pcie.link.width.current",
+        "--format=csv,noheader,nounits",
+    ]
+    try:
+        gpu_lines = subprocess.run(
+            query, check=True, capture_output=True, text=True
+        ).stdout.splitlines()
+        compiler_line = subprocess.run(
+            [compiler, "--version"], check=True, capture_output=True, text=True
+        ).stdout.splitlines()[0]
+    except (OSError, subprocess.CalledProcessError, IndexError) as error:
+        logger.warning("PCIe metadata collection failed: %s", error)
+        return
+
+    gpus: list[dict[str, object]] = []
+    for index, line in enumerate(gpu_lines):
+        fields = [field.strip() for field in line.split(",")]
+        if len(fields) != 3:
+            logger.warning("Unexpected nvidia-smi PCIe metadata row: %s", line)
+            continue
+        name, generation, width = fields
+        gpus.append(
+            {
+                "index": index,
+                "model": name,
+                "pcie_generation": int(generation)
+                if generation.isdigit()
+                else generation,
+                "negotiated_link_width": int(width) if width.isdigit() else width,
+            }
+        )
+    (output_dir / "pcie-metadata.json").write_text(
+        json.dumps({"gpus": gpus, "compiler": compiler_line}, indent=2),
+        encoding="utf-8",
+    )
+
+
 def _target_display_name(target: str) -> str:
     for prefix in ("pernix_", "pcie_"):
         if target.startswith(prefix):
@@ -269,6 +315,8 @@ def _run_targets(targets: tuple[str, ...], options: RunOptions) -> Path:
         built_targets.append((target, executable))
 
     _collect_machine_state(repository, output_dir)
+    if options.enable_cuda:
+        _collect_pcie_state(output_dir, options.compiler)
 
     total_targets = len(built_targets)
     progress_started = time.monotonic()
@@ -290,8 +338,19 @@ def _run_targets(targets: tuple[str, ...], options: RunOptions) -> Path:
             f"--benchmark_out={output_file}",
             "--benchmark_out_format=json",
             f"--benchmark_min_time={options.benchmark_min_time:g}s",
+            f"--benchmark_repetitions={options.benchmark_repetitions}",
+            "--benchmark_report_aggregates_only=false",
+            f"--benchmark_min_warmup_time={options.benchmark_min_warmup_time:g}s",
             "--benchmark_context="
             f"benchmark_min_time_seconds={options.benchmark_min_time:g}",
+            "--benchmark_context="
+            f"benchmark_repetitions={options.benchmark_repetitions}",
+            "--benchmark_context="
+            f"benchmark_min_warmup_time_seconds={options.benchmark_min_warmup_time:g}",
+            "--benchmark_context=compiler_optimization=-O3",
+            f"--benchmark_context=compiler={options.compiler}",
+            f"--benchmark_context=build_type={options.build_type}",
+            f"--benchmark_context=benchmark_target={target}",
         ]
         logger.info("Running benchmark target: %s", target)
         subprocess.run(command, cwd=project.build_dir, check=True)
@@ -343,6 +402,8 @@ def run_pcie(
         output_dir=options.output_dir,
         clean=options.clean,
         benchmark_min_time=options.benchmark_min_time,
+        benchmark_repetitions=options.benchmark_repetitions,
+        benchmark_min_warmup_time=options.benchmark_min_warmup_time,
         enable_cuda=True,
     )
     _run_targets(tuple(f"pcie_{name}" for name in selected), cuda_options)
@@ -356,5 +417,19 @@ def run_all(
 ) -> int:
     selected = select_pernix_variants(None, host or detect_host())
     targets = tuple(f"pernix_{name}" for name in selected) + ("cp2k",)
-    _run_targets(targets, options)
+    output_dir = _run_targets(targets, options)
+    if {"avx2", "avx512vbmi"}.issubset(selected):
+        repository = find_repository_root()
+        logger.info("Generating LLVM-MCA in-core instruction models")
+        generate_incore_models(
+            repository,
+            ModelOptions(
+                results_dir=output_dir,
+                build_dir=resolve_build_dir(repository, options),
+                compiler=options.compiler,
+                llvm_mca=os.environ.get("LLVM_MCA", "llvm-mca"),
+                likwid_perfctr=os.environ.get("LIKWID_PERFCTR"),
+                llvm_cpu=os.environ.get("PERNIX_LLVM_CPU"),
+            ),
+        )
     return 0

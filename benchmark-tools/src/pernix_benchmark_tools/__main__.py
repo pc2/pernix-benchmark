@@ -3,11 +3,14 @@ from __future__ import annotations
 import argparse
 import logging
 import math
+import os
 import subprocess
 from collections.abc import Sequence
+from pathlib import Path
 
 from rich.logging import RichHandler
 
+from .model import ModelOptions, generate_incore_models
 from .runner import PERNIX_VARIANTS, RunOptions, run_all, run_cp2k, run_pcie, run_pernix
 
 logging.basicConfig(
@@ -88,6 +91,20 @@ def _add_run_options(
         metavar="SECONDS",
         help="Minimum measurement time per benchmark case (default: 0.25 seconds).",
     )
+    parser.add_argument(
+        "--benchmark-repetitions",
+        type=_positive_int,
+        default=argparse.SUPPRESS if suppress_defaults else 5,
+        metavar="COUNT",
+        help="Stored repetitions per benchmark case (default: 5).",
+    )
+    parser.add_argument(
+        "--benchmark-min-warmup-time",
+        type=_positive_finite_float,
+        default=argparse.SUPPRESS if suppress_defaults else 0.05,
+        metavar="SECONDS",
+        help="Minimum warm-up time per benchmark case (default: 0.05 seconds).",
+    )
 
 
 def _options(args: argparse.Namespace) -> RunOptions:
@@ -99,6 +116,8 @@ def _options(args: argparse.Namespace) -> RunOptions:
         output_dir=args.output_dir,
         clean=args.clean,
         benchmark_min_time=args.benchmark_min_time,
+        benchmark_repetitions=args.benchmark_repetitions,
+        benchmark_min_warmup_time=args.benchmark_min_warmup_time,
     )
 
 
@@ -116,6 +135,34 @@ def _handle_pcie(args: argparse.Namespace) -> int:
 
 def _handle_all(args: argparse.Namespace) -> int:
     return run_all(_options(args))
+
+
+def _handle_model(args: argparse.Namespace) -> int:
+    from .runner import find_repository_root
+
+    repository = find_repository_root()
+    results_dir = Path(args.results_dir).expanduser().resolve()
+    build_dir = (
+        Path(args.build_dir).expanduser().resolve()
+        if args.build_dir
+        else repository / "build" / "instruction-model"
+    )
+    path = generate_incore_models(
+        repository,
+        ModelOptions(
+            results_dir=results_dir,
+            build_dir=build_dir,
+            compiler=args.compiler,
+            llvm_mca=args.llvm_mca,
+            likwid_perfctr=args.likwid_perfctr,
+            cpu_frequency_hz=args.cpu_frequency_hz,
+            llvm_cpu=args.llvm_cpu,
+            mca_iterations=args.mca_iterations,
+            probe_min_seconds=args.probe_min_time,
+        ),
+    )
+    logger.info("Instruction model saved to %s", path)
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -150,12 +197,46 @@ def build_parser() -> argparse.ArgumentParser:
     cp2k_parser.set_defaults(handler=_handle_cp2k)
 
     pcie_parser = run_commands.add_parser(
-        "pcie", help="Run CUDA PCIe end-to-end Pernix benchmarks on x86.")
+        "pcie", help="Run CUDA PCIe end-to-end Pernix benchmarks on x86."
+    )
     pcie_parser.add_argument(
-        "variant", nargs="?", choices=PERNIX_VARIANTS,
-        help="Run only this x86 Pernix implementation.")
+        "variant",
+        nargs="?",
+        choices=PERNIX_VARIANTS,
+        help="Run only this x86 Pernix implementation.",
+    )
     _add_run_options(pcie_parser, suppress_defaults=True)
     pcie_parser.set_defaults(handler=_handle_pcie)
+
+    model_parser = commands.add_parser(
+        "model",
+        help="Generate LLVM-MCA in-core model data and optional LIKWID diagnostics.",
+    )
+    model_parser.add_argument("--results-dir", required=True)
+    model_parser.add_argument("--build-dir")
+    model_parser.add_argument("--compiler", default="g++")
+    model_parser.add_argument(
+        "--llvm-mca", default=os.environ.get("LLVM_MCA", "llvm-mca")
+    )
+    model_parser.add_argument(
+        "--likwid-perfctr",
+        default=os.environ.get("LIKWID_PERFCTR"),
+        help="LIKWID executable; live Linux CPU frequency is used if unavailable.",
+    )
+    model_parser.add_argument(
+        "--cpu-frequency-hz",
+        type=_positive_finite_float,
+        help="Independently measured frequency if Linux cannot report a live value.",
+    )
+    model_parser.add_argument("--llvm-cpu")
+    model_parser.add_argument("--mca-iterations", type=_positive_int, default=200)
+    model_parser.add_argument(
+        "--probe-min-time",
+        type=_positive_finite_float,
+        default=1.0,
+        metavar="SECONDS",
+    )
+    model_parser.set_defaults(handler=_handle_model)
 
     return parser
 

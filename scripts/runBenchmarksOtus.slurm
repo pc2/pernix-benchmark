@@ -28,9 +28,32 @@ fi
 
 module reset
 module load tools/googlebenchmark/1.9.4-GCCcore-14.3.0
-module load devel/CMake/4.2.1-GCCcore-15.2.0
-module load lang/Python/3.14.2-GCCcore-15.2.0
-module load compiler/GCC/15.2.0
+module load tools/likwid/5.5.2rc2-GCC-14.3.0
+module load devel/CMake/4.0.3-GCCcore-14.3.0
+module load lang/Python/3.13.5-GCCcore-14.3.0
+module load compiler/GCC/14.3.0
+
+# Otus provides LLVM 20; accept both its versioned and unversioned executable
+# names. LLVM_MCA can still be set explicitly before submission.
+if [[ -z "${LLVM_MCA:-}" ]]; then
+    for candidate in llvm-mca-20 llvm-mca; do
+        if command -v "${candidate}" >/dev/null 2>&1; then
+            LLVM_MCA="${candidate}"
+            break
+        fi
+    done
+fi
+export LLVM_MCA="${LLVM_MCA:-llvm-mca-20}"
+export LIKWID_PERFCTR="${LIKWID_PERFCTR:-likwid-perfctr}"
+export PERNIX_LLVM_CPU="${PERNIX_LLVM_CPU:-znver5}"
+if ! command -v "${LLVM_MCA}" >/dev/null 2>&1; then
+    echo "LLVM-MCA 20 was not found. Load the installed LLVM 20 module or set LLVM_MCA." >&2
+    exit 1
+fi
+if ! command -v "${LIKWID_PERFCTR}" >/dev/null 2>&1; then
+    echo "likwid-perfctr was not found after loading tools/likwid/5.5.2rc2-GCC-14.3.0." >&2
+    exit 1
+fi
 
 if ! python -m pip show uv >/dev/null 2>&1; then
     echo "Installing uv in the user site-packages directory."

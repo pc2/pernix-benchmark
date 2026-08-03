@@ -112,7 +112,10 @@ def test_run_all_maps_supported_pernix_targets_and_cp2k() -> None:
     host = HostCapabilities("x86", frozenset({"avx2"}))
     options = RunOptions()
 
-    with patch("pernix_benchmark_tools.runner._run_targets") as run_targets:
+    with (
+        patch("pernix_benchmark_tools.runner._run_targets") as run_targets,
+        patch("pernix_benchmark_tools.runner.generate_incore_models"),
+    ):
         result = run_all(options, host=host)
 
     assert result == 0
@@ -120,6 +123,29 @@ def test_run_all_maps_supported_pernix_targets_and_cp2k() -> None:
         ("pernix_fallback", "pernix_avx2", "cp2k"),
         options,
     )
+
+
+def test_run_all_generates_complete_x86_instruction_model(tmp_path: Path) -> None:
+    host = HostCapabilities("x86", frozenset({"avx2", "bmi2", "avx512f", "avx512vbmi"}))
+    options = RunOptions(compiler="clang++", build_dir=str(tmp_path / "build"))
+    results = tmp_path / "results"
+
+    with (
+        patch("pernix_benchmark_tools.runner._run_targets", return_value=results),
+        patch(
+            "pernix_benchmark_tools.runner.find_repository_root",
+            return_value=tmp_path,
+        ),
+        patch("pernix_benchmark_tools.runner.generate_incore_models") as generate,
+    ):
+        result = run_all(options, host=host)
+
+    assert result == 0
+    repository, model_options = generate.call_args.args
+    assert repository == tmp_path
+    assert model_options.results_dir == results
+    assert model_options.build_dir == tmp_path / "build"
+    assert model_options.compiler == "clang++"
 
 
 def test_run_pcie_maps_x86_variants_to_cuda_targets() -> None:
@@ -137,7 +163,9 @@ def test_run_pcie_maps_x86_variants_to_cuda_targets() -> None:
 
 def test_run_pcie_rejects_non_x86_hosts() -> None:
     with pytest.raises(RuntimeError, match="x86"):
-        run_pcie(None, RunOptions(), host=HostCapabilities("arm64", frozenset({"asimd"})))
+        run_pcie(
+            None, RunOptions(), host=HostCapabilities("arm64", frozenset({"asimd"}))
+        )
 
 
 def test_slurm_progress_reports_completed_count_and_current_target() -> None:
@@ -204,10 +232,7 @@ def test_slurm_progress_uses_unknown_eta_before_first_target() -> None:
             elapsed_seconds=0.4,
         )
 
-    assert (
-        run.call_args.args[0][-1]
-        == "Comment=0/4 (Current: FALLBACK) [00:00:00<?]"
-    )
+    assert run.call_args.args[0][-1] == "Comment=0/4 (Current: FALLBACK) [00:00:00<?]"
 
 
 def test_run_targets_configures_once_and_runs_each_executable(tmp_path: Path) -> None:
@@ -257,13 +282,13 @@ def test_run_targets_configures_once_and_runs_each_executable(tmp_path: Path) ->
     ]
     first_benchmark_command = subprocess_run.call_args_list[1].args[0]
     assert first_benchmark_command[0].endswith("bench_pernix_avx2")
-    assert first_benchmark_command[1].endswith(
-        "benchmark_pernix_avx2_results.json"
-    )
+    assert first_benchmark_command[1].endswith("benchmark_pernix_avx2_results.json")
     assert "--benchmark_min_time=0.25s" in first_benchmark_command
+    assert "--benchmark_repetitions=5" in first_benchmark_command
+    assert "--benchmark_report_aggregates_only=false" in first_benchmark_command
+    assert "--benchmark_min_warmup_time=0.05s" in first_benchmark_command
     assert (
-        "--benchmark_context=benchmark_min_time_seconds=0.25"
-        in first_benchmark_command
+        "--benchmark_context=benchmark_min_time_seconds=0.25" in first_benchmark_command
     )
     assert events == [
         "build",
@@ -308,7 +333,31 @@ def test_machine_state_failure_warns_cleans_partial_file_and_continues(
     assert "MachineState collection failed" in caplog.text
 
 
-def test_run_targets_forwards_custom_benchmark_min_time(tmp_path: Path) -> None:
+def test_collect_pcie_state_records_model_link_and_compiler(tmp_path: Path) -> None:
+    from pernix_benchmark_tools import runner
+
+    results = [
+        subprocess.CompletedProcess([], 0, "NVIDIA H100, 5, 16\n", ""),
+        subprocess.CompletedProcess([], 0, "g++ (GCC) 15.2.0\nCopyright", ""),
+    ]
+    with patch.object(runner.subprocess, "run", side_effect=results):
+        runner._collect_pcie_state(tmp_path, "g++")
+
+    import json
+
+    metadata = json.loads((tmp_path / "pcie-metadata.json").read_text())
+    assert metadata["compiler"] == "g++ (GCC) 15.2.0"
+    assert metadata["gpus"] == [
+        {
+            "index": 0,
+            "model": "NVIDIA H100",
+            "pcie_generation": 5,
+            "negotiated_link_width": 16,
+        }
+    ]
+
+
+def test_run_targets_forwards_custom_benchmark_timing(tmp_path: Path) -> None:
     from pernix_benchmark_tools import runner
 
     repository = tmp_path / "repository"
@@ -321,6 +370,8 @@ def test_run_targets_forwards_custom_benchmark_min_time(tmp_path: Path) -> None:
     options = RunOptions(
         output_dir=str(repository / "output"),
         benchmark_min_time=1.5,
+        benchmark_repetitions=7,
+        benchmark_min_warmup_time=0.2,
     )
 
     with (
@@ -333,4 +384,6 @@ def test_run_targets_forwards_custom_benchmark_min_time(tmp_path: Path) -> None:
 
     command = run.call_args.args[0]
     assert "--benchmark_min_time=1.5s" in command
+    assert "--benchmark_repetitions=7" in command
+    assert "--benchmark_min_warmup_time=0.2s" in command
     assert "--benchmark_context=benchmark_min_time_seconds=1.5" in command
