@@ -9,6 +9,30 @@ import pytest
 from pernix_benchmark_tools import model
 
 
+def test_model_overlay_does_not_modify_pernix_headers(tmp_path: Path) -> None:
+    include = tmp_path / "pernix-include"
+    originals: dict[str, str] = {}
+    for relative in model._MODEL_OVERLAY_HEADERS:
+        path = include / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        contents = "#pragma GCC unroll 4\n"
+        if relative.endswith("avx2_compression.h"):
+            contents += "__m256i mm256_pack_epi32_avx2(__m256i input) {\n"
+        path.write_text(contents)
+        originals[relative] = contents
+
+    overlay = model._prepare_model_include_overlay(include, tmp_path / "artifacts")
+
+    for relative, original in originals.items():
+        assert (include / relative).read_text() == original
+        generated = (overlay / relative).read_text()
+        assert "#pragma GCC unroll 64" in generated
+    assert (
+        "__attribute__((always_inline)) inline"
+        in (overlay / "pernix/x86/avx2/avx2_compression.h").read_text()
+    )
+
+
 def test_parse_likwid_extracts_clock_group_values() -> None:
     values = model._parse_likwid(
         "Event,Counter,HWThread 0\n"

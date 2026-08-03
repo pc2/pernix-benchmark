@@ -60,6 +60,12 @@ _ISA = {
         "PERNIX_MODEL_ISA_AVX512VBMI",
     ),
 }
+_MODEL_OVERLAY_HEADERS = (
+    "pernix/x86/avx2/avx2_compression.h",
+    "pernix/x86/avx2/avx2_decompression.h",
+    "pernix/x86/avx512vbmi/avx512vbmi_compression.h",
+    "pernix/x86/avx512vbmi/avx512vbmi_decompression.h",
+)
 
 
 class ModelGenerationError(RuntimeError):
@@ -108,6 +114,46 @@ def _run(
         ) from error
 
 
+def _prepare_model_include_overlay(include: Path, artifact_dir: Path) -> Path:
+    """Create model-only header copies without changing the Pernix checkout."""
+
+    overlay_include = artifact_dir / "include-overlay"
+    for relative in _MODEL_OVERLAY_HEADERS:
+        source = include / relative
+        destination = overlay_include / relative
+        try:
+            contents = source.read_text(encoding="utf-8")
+        except OSError as error:
+            raise ModelGenerationError(
+                f"Could not read Pernix header: {source}"
+            ) from error
+
+        contents, pragma_count = re.subn(
+            r"#pragma\s+GCC\s+unroll\s+\d+",
+            "#pragma GCC unroll 64",
+            contents,
+        )
+        if pragma_count == 0:
+            raise ModelGenerationError(
+                f"Model overlay found no GCC unroll pragmas in {source}"
+            )
+        if relative.endswith("avx2_compression.h"):
+            signature = "__m256i mm256_pack_epi32_avx2(__m256i input) {"
+            replacement = (
+                "__attribute__((always_inline)) inline __m256i "
+                "mm256_pack_epi32_avx2(__m256i input) {"
+            )
+            if contents.count(signature) != 1:
+                raise ModelGenerationError(
+                    "Could not locate the AVX2 pack helper in the model overlay"
+                )
+            contents = contents.replace(signature, replacement)
+
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(contents, encoding="utf-8")
+    return overlay_include
+
+
 def _compile_model_artifacts(
     repository: Path,
     options: ModelOptions,
@@ -119,6 +165,7 @@ def _compile_model_artifacts(
     include = repository / "external" / "pernix" / "include"
     artifact_dir = options.build_dir / "instruction-model"
     artifact_dir.mkdir(parents=True, exist_ok=True)
+    overlay_include = _prepare_model_include_overlay(include, artifact_dir)
     assembly = artifact_dir / f"incore_model_{isa_key}.s"
     probe = artifact_dir / f"incore_probe_{isa_key}"
     common = [
@@ -128,7 +175,6 @@ def _compile_model_artifacts(
         "-DNDEBUG",
         *isa_flags,
         f"-D{definition}=1",
-        f"-I{include}",
         "-w",
         str(source),
     ]
@@ -152,7 +198,8 @@ def _compile_model_artifacts(
         [
             *common,
             "-DPERNIX_MODEL_MCA=1",
-            "-DPERNIX_MODEL_FULL_UNROLL=1",
+            f"-I{overlay_include}",
+            f"-I{include}",
             *model_unroll_flags,
             "-S",
             "-o",
@@ -160,8 +207,17 @@ def _compile_model_artifacts(
         ],
         cwd=repository,
     )
-    _run([*common, "-o", str(probe)], cwd=repository)
-    return assembly, probe, ["-O3", *isa_flags, *model_unroll_flags]
+    _run([*common, f"-I{include}", "-o", str(probe)], cwd=repository)
+    return (
+        assembly,
+        probe,
+        [
+            "-O3",
+            *isa_flags,
+            *model_unroll_flags,
+            f"-I{overlay_include}",
+        ],
+    )
 
 
 def _llvm_version(llvm_mca: str, repository: Path) -> str:
@@ -630,8 +686,13 @@ def generate_incore_models(repository: Path, options: ModelOptions) -> Path:
             "using cpuinfo_cur_freq, scaling_cur_freq, then /proc/cpuinfo."
         ),
         "semantics": (
-            "Direct one-block kernel with model-only complete unrolling; "
-            "loads and stores included, harness and function entry/exit excluded."
+            "Direct one-block kernel compiled through a build-local copy of the "
+            "original Pernix headers with model-only complete unrolling and AVX2 "
+            "helper inlining; the Pernix checkout is not modified. Loads and stores "
+            "are included, while harness and function entry/exit are excluded."
+        ),
+        "model_header_overlay": str(
+            options.build_dir.resolve() / "instruction-model" / "include-overlay"
         ),
         "hardware_diagnostics": (
             "When LIKWID's CLOCK group is usable, kernel and no-op control are calibrated "
