@@ -132,11 +132,28 @@ def _compile_model_artifacts(
         "-w",
         str(source),
     ]
+    compiler_version = _run([compiler, "--version"], cwd=repository).stdout.lower()
+    model_unroll_flags = ["-funroll-loops"]
+    if "gcc" in compiler_version or "g++" in compiler_version:
+        # GCC 14 may retain small constant-trip loops despite an unroll pragma
+        # when its default code-growth limits are reached. These limits apply
+        # only to the model assembly and are deliberately generous enough for
+        # the largest one-block specialization (32 iterations).
+        model_unroll_flags.extend(
+            [
+                "--param=max-completely-peeled-insns=100000",
+                "--param=max-completely-peel-times=64",
+                "--param=max-unrolled-insns=100000",
+                "--param=max-average-unrolled-insns=100000",
+                "--param=max-unroll-times=64",
+            ]
+        )
     _run(
         [
             *common,
             "-DPERNIX_MODEL_MCA=1",
             "-DPERNIX_MODEL_FULL_UNROLL=1",
+            *model_unroll_flags,
             "-S",
             "-o",
             str(assembly),
@@ -144,7 +161,7 @@ def _compile_model_artifacts(
         cwd=repository,
     )
     _run([*common, "-o", str(probe)], cwd=repository)
-    return assembly, probe, ["-O3", *isa_flags]
+    return assembly, probe, ["-O3", *isa_flags, *model_unroll_flags]
 
 
 def _llvm_version(llvm_mca: str, repository: Path) -> str:
