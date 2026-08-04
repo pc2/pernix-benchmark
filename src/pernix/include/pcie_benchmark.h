@@ -4,6 +4,7 @@
 #include <benchmark/benchmark.h>
 #include <cuda_runtime_api.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <random>
 #include <stdexcept>
@@ -15,6 +16,13 @@ namespace pernix_benchmark::pcie {
 
 constexpr std::uint64_t kBlockBytes = 64;
 constexpr std::uint64_t kPosterOriginalBytes = std::uint64_t{1} << 30;
+// Some original Pernix kernels implement partial input reads with masked vector
+// loads.  The mask prevents inactive lanes from being accessed, but the active
+// lane containing the final payload byte can extend a few bytes beyond the
+// logical 64-byte block.  Keep one full vector of mapped storage after the last
+// block; this padding is never included in a PCIe transfer or in the reported
+// compressed byte count.
+constexpr std::size_t kPackedGuardBytes = 64;
 
 inline void check_cuda(const cudaError_t status, const char* operation) {
     if (status != cudaSuccess) {
@@ -79,8 +87,9 @@ struct Fixture {
 
     explicit Fixture(const std::size_t payload)
         : blocks(payload / kBlockBytes), payload_bytes(payload), input(blocks * kElementsPerBlock),
-          packed(payload), output(blocks * kElementsPerBlock),
+          packed(payload + kPackedGuardBytes), output(blocks * kElementsPerBlock),
           device(blocks * kElementsPerBlock * sizeof(ValueT)) {
+        std::fill_n(packed.data(), payload_bytes + kPackedGuardBytes, std::uint8_t{0});
         std::mt19937 generator(0xC0FFEE);
         std::uniform_real_distribution<ValueT> input_distribution(static_cast<ValueT>(-1), static_cast<ValueT>(1));
         std::uniform_real_distribution<ValueT> scale_distribution(static_cast<ValueT>(0.0001), static_cast<ValueT>(1));
