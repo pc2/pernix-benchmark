@@ -118,6 +118,40 @@ def test_loads_and_normalizes_pcie_results(tmp_path: Path) -> None:
     assert d2h["payload_bytes"] == 67108864
 
 
+def test_parses_google_benchmark_aggregate_name_suffixes(tmp_path: Path) -> None:
+    path = tmp_path / "benchmark_pcie_avx512vbmi_results.json"
+    path.write_text(
+        json.dumps(
+            {
+                "context": {"host_name": "fpga1706", "mhz_per_cpu": 2600},
+                "benchmarks": [
+                    {
+                        "name": "BM_pcie_h2d_avx512vbmif32_13/440401920",
+                        "run_type": "iteration",
+                        "bytes_per_second": 1.0,
+                    },
+                    {
+                        "name": "BM_pcie_h2d_avx512vbmif32_13/440401920_median",
+                        "run_type": "aggregate",
+                        "aggregate_name": "median",
+                        "bytes_per_second": 1.0,
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    results = load_benchmark_results(tmp_path, family="pcie")
+
+    assert len(results) == 2
+    assert set(results["bit_width"]) == {13}
+    assert set(results["payload_bytes"]) == {440401920}
+    assert set(results["blocks"]) == {6881280}
+    aggregate = results.loc[results["run_type"].eq("aggregate")].iloc[0]
+    assert aggregate["aggregate_name"] == "median"
+
+
 def test_filters_result_files_by_benchmark_family(tmp_path: Path) -> None:
     _write_result(
         tmp_path / "benchmark_pernix_avx2_results.json",

@@ -61,8 +61,21 @@ def _require_matches(
         )
 
 
+def _names_for_parsing(frame: pd.DataFrame) -> pd.Series:
+    """Remove Google Benchmark's aggregate suffix without discarding the row."""
+
+    names = frame["name"].astype(str).copy()
+    if "aggregate_name" not in frame:
+        return names
+    for index, aggregate_name in frame["aggregate_name"].dropna().items():
+        suffix = f"_{aggregate_name}"
+        if names.at[index].endswith(suffix):
+            names.at[index] = names.at[index][: -len(suffix)]
+    return names
+
+
 def _parse_pernix(frame: pd.DataFrame, path: Path, implementation: str) -> pd.DataFrame:
-    extracted = frame["name"].str.extract(PERNIX_BENCHMARK_RE)
+    extracted = _names_for_parsing(frame).str.extract(PERNIX_BENCHMARK_RE)
     _require_matches(frame["name"], extracted, path.name)
 
     parsed_implementations = set(extracted["implementation"])
@@ -84,11 +97,12 @@ def _parse_pernix(frame: pd.DataFrame, path: Path, implementation: str) -> pd.Da
 
 
 def _parse_cp2k(frame: pd.DataFrame, path: Path) -> pd.DataFrame:
-    modern = frame["name"].str.extract(PERNIX_BENCHMARK_RE)
+    parseable_names = _names_for_parsing(frame)
+    modern = parseable_names.str.extract(PERNIX_BENCHMARK_RE)
     if not modern.isna().any(axis=1).any():
         return _parse_pernix(frame, path, "cp2k")
 
-    extracted = frame["name"].str.extract(CP2K_BENCHMARK_RE)
+    extracted = parseable_names.str.extract(CP2K_BENCHMARK_RE)
     _require_matches(frame["name"], extracted, path.name)
     extracted["implementation"] = "cp2k"
     extracted["value_type"] = "f64"
@@ -99,7 +113,7 @@ def _parse_cp2k(frame: pd.DataFrame, path: Path) -> pd.DataFrame:
 
 
 def _parse_pcie(frame: pd.DataFrame, path: Path, implementation: str) -> pd.DataFrame:
-    extracted = frame["name"].str.extract(PCIE_BENCHMARK_RE)
+    extracted = _names_for_parsing(frame).str.extract(PCIE_BENCHMARK_RE)
     _require_matches(frame["name"], extracted, path.name)
     parsed_implementations = set(extracted["implementation"])
     if parsed_implementations != {implementation}:

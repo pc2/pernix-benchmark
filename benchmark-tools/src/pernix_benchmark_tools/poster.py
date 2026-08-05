@@ -413,11 +413,67 @@ def cache_metadata(contexts: pd.DataFrame) -> dict[str, Any]:
     return result
 
 
+def copy_bandwidth_metadata(
+    memory_results: pd.DataFrame,
+    *,
+    minimum_data_size_bytes: int = 512 * 2**20,
+) -> dict[str, Any]:
+    """Select a DRAM-scale LIKWID copy result for the memory bound."""
+
+    series = prepare_copy_bandwidth_data(memory_results)
+    usable = series[series["working_set_bytes"].ge(minimum_data_size_bytes)]
+    if usable.empty:
+        usable = series[series["working_set_bytes"].eq(series["working_set_bytes"].max())]
+    useful_bytes_per_second = float(usable["useful_bytes_per_second"].median())
+    return {
+        "kernel": str(series["kernel"].iloc[0]),
+        "minimum_data_size_bytes": minimum_data_size_bytes,
+        "samples": int(len(usable)),
+        "statistic": "median",
+        "useful_bytes_per_second": useful_bytes_per_second,
+        "physical_bytes_per_second": 2 * useful_bytes_per_second,
+    }
+
+
+def prepare_copy_bandwidth_data(memory_results: pd.DataFrame) -> pd.DataFrame:
+    """Normalize the preferred LIKWID copy sweep for poster plotting."""
+
+    _require_columns(memory_results, ["data_size"], "memory benchmark CSV")
+    data_sizes = pd.to_numeric(memory_results["data_size"], errors="raise")
+    for column in ("copy_avx512", "copy_avx", "copy"):
+        if column not in memory_results:
+            continue
+        bandwidth = pd.to_numeric(memory_results[column], errors="coerce")
+        usable = pd.DataFrame(
+            {
+                "working_set_bytes": data_sizes,
+                "useful_bytes_per_second": bandwidth,
+            }
+        ).dropna()
+        if usable.empty:
+            continue
+        usable["physical_bytes_per_second"] = 2 * usable["useful_bytes_per_second"]
+        usable["kernel"] = column
+        return (
+            usable.groupby("working_set_bytes", as_index=False, observed=True)
+            .agg(
+                useful_bytes_per_second=("useful_bytes_per_second", "median"),
+                physical_bytes_per_second=("physical_bytes_per_second", "median"),
+                kernel=("kernel", "first"),
+            )
+            .sort_values("working_set_bytes")
+        )
+    raise PosterDataError(
+        "Memory benchmark CSV contains no usable copy_avx512, copy_avx, or copy data"
+    )
+
+
 def plot_host_memory_throughput(
     data: pd.DataFrame,
     caches: Mapping[str, Mapping[str, Any]],
     *,
     physical_memory_bytes_per_second: float | None = None,
+    memory_bandwidth: pd.DataFrame | None = None,
 ) -> plt.Figure:
     """Render the two-panel host-memory throughput poster figure."""
 
@@ -443,9 +499,9 @@ def plot_host_memory_throughput(
     markers = {7: "o", 13: "s", 21: "^"}
     colors = {"compression": COMPRESSION, "decompression": DECOMPRESSION}
     cache_edges = [
-        ("L1", float(caches["l1"]["bytes"])),
-        ("L2", float(caches["l2"]["bytes"])),
-        ("L3", float(caches["l3"]["bytes"])),
+        ("L1", float(caches["l1"]["bytes"]), caches["l1"]),
+        ("L2", float(caches["l2"]["bytes"]), caches["l2"]),
+        ("L3", float(caches["l3"]["bytes"]), caches["l3"]),
     ]
 
     for axis, operation in zip(axes, ("compression", "decompression"), strict=True):
@@ -454,9 +510,22 @@ def plot_host_memory_throughput(
             raise PosterDataError(f"No host-memory rows for {operation}")
         xmin = float(operation_data["working_set_bytes"].min())
         xmax = float(operation_data["working_set_bytes"].max())
-        boundaries = [xmin] + [edge for _, edge in cache_edges] + [xmax]
-        region_names = ["L1", "L2", "L3", "DRAM"]
-        for index, region in enumerate(region_names):
+        boundaries = [xmin] + [edge for _, edge, _ in cache_edges] + [xmax]
+        region_labels = [
+            "\n".join(
+                filter(
+                    None,
+                    (
+                        f"{name} ({cache.get('plot_scope')})"
+                        if cache.get("plot_scope")
+                        else name,
+                        _binary_bytes_label(edge, 0),
+                    ),
+                )
+            )
+            for name, edge, cache in cache_edges
+        ] + ["DRAM"]
+        for index, region_label in enumerate(region_labels):
             left = max(xmin, boundaries[index])
             right = min(xmax, boundaries[index + 1])
             if right <= left:
@@ -465,13 +534,23 @@ def plot_host_memory_throughput(
             axis.text(
                 (left * right) ** 0.5,
                 0.98,
-                region,
+                region_label,
                 transform=axis.get_xaxis_transform(),
                 ha="center",
                 va="top",
                 color=BASELINE,
                 fontsize=8.5,
             )
+        for _name, edge, _cache in cache_edges:
+            if xmin < edge < xmax:
+                axis.axvline(
+                    edge,
+                    color=BASELINE,
+                    linestyle="--",
+                    linewidth=1.5,
+                    alpha=0.9,
+                    zorder=2,
+                )
         for width in (7, 13, 21):
             series = operation_data[
                 operation_data["isa"].eq("AVX-512-VBMI")
@@ -500,20 +579,57 @@ def plot_host_memory_throughput(
                 label="CP2K, N=13",
                 zorder=2,
             )
-        if physical_memory_bytes_per_second is not None:
-            for width in (7, 13, 21):
-                values = 512 // width
-                bound = physical_memory_bytes_per_second * (4 * values) / (
-                    4 * values + 64
+        if memory_bandwidth is not None and not memory_bandwidth.empty:
+            _require_columns(
+                memory_bandwidth,
+                ["working_set_bytes", "physical_bytes_per_second"],
+                "memory bandwidth data",
+            )
+            measured_bound = memory_bandwidth[
+                memory_bandwidth["working_set_bytes"].between(xmin, xmax)
+            ].sort_values("working_set_bytes")
+            if not measured_bound.empty:
+                physical = measured_bound["physical_bytes_per_second"].to_numpy()
+                values = 512 // 12
+                logical_bound = (
+                    physical * (4 * values) / (4 * values + 64) / 1e9
                 )
-                axis.axhline(
-                    bound / 1e9,
+                axis.plot(
+                    measured_bound["working_set_bytes"],
+                    logical_bound,
                     color=BASELINE,
                     linestyle="--",
-                    linewidth=1.5,
-                    alpha=0.45,
-                    label="Memory bound" if width == 13 else None,
+                    linewidth=1.6,
+                    alpha=0.75,
+                    label="LIKWID copy bound (N=12)",
+                    zorder=2,
                 )
+        elif physical_memory_bytes_per_second is not None:
+            values = 512 // 12
+            bound = physical_memory_bytes_per_second * (4 * values) / (
+                4 * values + 64
+            )
+            axis.axhline(
+                bound / 1e9,
+                color=BASELINE,
+                linestyle="--",
+                linewidth=1.5,
+                alpha=0.45,
+                label="Memory bound (N=12)",
+            )
+        # Keep the upper part of the axes clear for the cache-region labels.
+        # Autoscaling alone places peak throughput directly beneath that text.
+        plotted_maximum = float(operation_data["logical_bytes_per_second"].max()) / 1e9
+        if physical_memory_bytes_per_second is not None:
+            values = 512 // 12
+            plotted_maximum = max(
+                plotted_maximum,
+                physical_memory_bytes_per_second
+                * (4 * values)
+                / (4 * values + 64)
+                / 1e9,
+            )
+        axis.set_ylim(0, plotted_maximum / 0.84)
         axis.set_xscale("log", base=2)
         axis.xaxis.set_major_formatter(FuncFormatter(_binary_bytes_label))
         axis.set_title(operation.title())
@@ -521,7 +637,15 @@ def plot_host_memory_throughput(
         axis.grid(axis="y", color=GRID, linewidth=0.8)
         axis.spines[["top", "right"]].set_visible(False)
     axes[0].set_ylabel("Original FP32 throughput [GB/s]")
-    axes[1].legend(loc="best", fontsize=8.5)
+    handles, labels = axes[1].get_legend_handles_labels()
+    figure.legend(
+        handles,
+        labels,
+        loc="outside lower center",
+        ncols=len(labels),
+        fontsize=8.5,
+        frameon=False,
+    )
     return figure
 
 
@@ -712,11 +836,13 @@ __all__ = [
     "PosterDataError",
     "TEXT",
     "cache_metadata",
+    "copy_bandwidth_metadata",
     "configure_poster_style",
     "export_tidy_csv",
     "plot_host_memory_throughput",
     "plot_incore_throughput",
     "plot_pcie_end_to_end",
+    "prepare_copy_bandwidth_data",
     "prepare_host_memory_data",
     "prepare_incore_data",
     "prepare_pcie_data",

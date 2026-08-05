@@ -8,9 +8,11 @@ from pernix_benchmark_tools.poster import (
     INCORE_COLUMNS,
     PCIE_COLUMNS,
     cache_metadata,
+    copy_bandwidth_metadata,
     plot_host_memory_throughput,
     plot_incore_throughput,
     plot_pcie_end_to_end,
+    prepare_copy_bandwidth_data,
     prepare_host_memory_data,
     prepare_incore_data,
     prepare_pcie_data,
@@ -103,9 +105,73 @@ def test_prepares_host_memory_data_and_cache_metadata() -> None:
     )
     caches = cache_metadata(contexts)
     assert caches["l3"]["scope"] == "shared by 8 logical CPUs"
-    figure = plot_host_memory_throughput(data, caches)
+    caches["l3"]["plot_scope"] = "per CCD"
+    working_sets = [4 * 2**10, 128 * 2**10, 2 * 2**20, 64 * 2**20]
+    data["working_set_bytes"] = [
+        working_sets[index % len(working_sets)] for index in range(len(data))
+    ]
+    memory_bandwidth = prepare_copy_bandwidth_data(
+        pd.DataFrame(
+            {
+                "data_size": [4 * 2**10, 2**20, 32 * 2**20, 64 * 2**20],
+                "copy_avx512": [200e9, 150e9, 100e9, 60e9],
+            }
+        )
+    )
+    figure = plot_host_memory_throughput(
+        data, caches, memory_bandwidth=memory_bandwidth
+    )
     assert tuple(figure.get_size_inches()) == (12.6, 5.2)
+    region_labels = {text.get_text() for text in figure.axes[0].texts}
+    assert {"L1\n48 KiB", "L2\n1 MiB", "L3 (per CCD)\n32 MiB", "DRAM"} <= region_labels
+    vertical_boundaries = {
+        float(line.get_xdata()[0])
+        for line in figure.axes[0].lines
+        if len(line.get_xdata()) == 2 and line.get_xdata()[0] == line.get_xdata()[1]
+    }
+    assert vertical_boundaries == {48 * 2**10, 2**20, 32 * 2**20}
+    boundary_lines = [
+        line
+        for line in figure.axes[0].lines
+        if len(line.get_xdata()) == 2 and line.get_xdata()[0] == line.get_xdata()[1]
+    ]
+    assert all(line.get_linestyle() == "--" for line in boundary_lines)
+    assert all(line.get_linewidth() == 1.5 for line in boundary_lines)
+    plotted_maximum = (
+        data.loc[data["operation"].eq("compression"), "logical_bytes_per_second"].max()
+        / 1e9
+    )
+    assert plotted_maximum / figure.axes[0].get_ylim()[1] <= 0.84 + 1e-12
+    legend_labels = figure.axes[1].get_legend_handles_labels()[1]
+    assert "LIKWID copy bound (N=12)" in legend_labels
+    assert len(figure.legends) == 1
+    assert not figure.axes[1].get_legend()
     plt.close(figure)
+
+
+def test_derives_physical_memory_bandwidth_from_dram_copy_results() -> None:
+    measurements = pd.DataFrame(
+        {
+            "data_size": [32 * 2**20, 512 * 2**20, 768 * 2**20, 2**30],
+            "copy": [80e9, 40e9, 39e9, 38e9],
+            "copy_avx512": [90e9, 52e9, 50e9, 48e9],
+        }
+    )
+
+    metadata = copy_bandwidth_metadata(measurements)
+    series = prepare_copy_bandwidth_data(measurements)
+
+    assert metadata["kernel"] == "copy_avx512"
+    assert metadata["samples"] == 3
+    assert metadata["useful_bytes_per_second"] == 50e9
+    assert metadata["physical_bytes_per_second"] == 100e9
+    assert list(series.columns) == [
+        "working_set_bytes",
+        "useful_bytes_per_second",
+        "physical_bytes_per_second",
+        "kernel",
+    ]
+    assert series["physical_bytes_per_second"].iloc[0] == 180e9
 
 
 def test_prepares_and_plots_pcie_data() -> None:

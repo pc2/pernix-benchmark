@@ -8,7 +8,7 @@
 #SBATCH --cpus-per-task=192
 #SBATCH --mem=0
 #SBATCH --exclusive
-#SBATCH --time=04:30:00
+#SBATCH --time=16:00:00
 #SBATCH --output=slurm-%x-%j.out
 
 set -euo pipefail
@@ -65,6 +65,9 @@ fi
 BUILD_BASE="${TMPDIR:-/tmp}"
 BUILD_DIR="${BUILD_BASE}/pernix-benchmark-build-${SLURM_JOB_ID}"
 RESULT_DIR="${REPOSITORY_ROOT}/benchmark-results/otus-${SLURM_JOB_ID}"
+BENCHMARK_MIN_TIME_SECONDS="${PERNIX_BENCHMARK_MIN_TIME_SECONDS:-0.25}"
+BENCHMARK_REPETITIONS="${PERNIX_BENCHMARK_REPETITIONS:-5}"
+BENCHMARK_MIN_WARMUP_TIME_SECONDS="${PERNIX_BENCHMARK_MIN_WARMUP_TIME_SECONDS:-0.05}"
 
 cleanup() {
     rm -rf -- "${BUILD_DIR}"
@@ -76,6 +79,9 @@ echo "Repository: ${REPOSITORY_ROOT}"
 echo "Build directory: ${BUILD_DIR}"
 echo "Result directory: ${RESULT_DIR}"
 echo "Build CPUs: ${SLURM_CPUS_PER_TASK}"
+echo "Benchmark minimum time: ${BENCHMARK_MIN_TIME_SECONDS} s per repetition"
+echo "Benchmark repetitions: ${BENCHMARK_REPETITIONS}"
+echo "Benchmark minimum warm-up: ${BENCHMARK_MIN_WARMUP_TIME_SECONDS} s"
 
 cd "${PYTHON_PROJECT}"
 
@@ -84,6 +90,9 @@ command=(
     --jobs "${SLURM_CPUS_PER_TASK}"
     --build-dir "${BUILD_DIR}"
     --output-dir "${RESULT_DIR}"
+    --benchmark-min-time "${BENCHMARK_MIN_TIME_SECONDS}"
+    --benchmark-repetitions "${BENCHMARK_REPETITIONS}"
+    --benchmark-min-warmup-time "${BENCHMARK_MIN_WARMUP_TIME_SECONDS}"
     --clean
 )
 command+=("$@")
