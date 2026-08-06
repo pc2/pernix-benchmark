@@ -8,8 +8,6 @@ dependencies = [
     "cmake>=4.4",
     "ninja>=1.13",
     "machinestate>=0.6",
-    "numpy>=2.5",
-    "typing-extensions>=4.16",
     "rich>=15.0.0",
 ]
 

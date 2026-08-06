@@ -1606,9 +1606,7 @@ dependencies = [
     { name = "cmake" },
     { name = "machinestate" },
     { name = "ninja" },
-    { name = "numpy" },
     { name = "rich" },
-    { name = "typing-extensions" },
 ]
 
 [package.dev-dependencies]
@@ -1631,9 +1629,7 @@ requires-dist = [
     { name = "cmake", specifier = ">=4.4" },
     { name = "machinestate", specifier = ">=0.6" },
     { name = "ninja", specifier = ">=1.13" },
-    { name = "numpy", specifier = ">=2.5" },
     { name = "rich", specifier = ">=15.0.0" },
-    { name = "typing-extensions", specifier = ">=4.16" },
 ]
 
 [package.metadata.requires-dev]
