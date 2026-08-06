@@ -119,7 +119,8 @@ public:
 
 template<uint8_t BIT_WIDTH, typename ValueT, bool DISABLE_MEM>
 struct BlockSizeArguments {
-    static void apply(benchmark::Benchmark *benchmark) {
+    template<typename BenchmarkT>
+    static void apply(BenchmarkT *benchmark) {
         if constexpr (DISABLE_MEM) {
             benchmark->RangeMultiplier(2)->Range(1 << 0, 1 << 22);
             return;
@@ -156,10 +157,14 @@ struct BlockSizeArguments {
 };
 
 #define BENCHMARK_DECOMPRESS_BLOCKS_REGISTER(name, width, memory_mode, value_type) \
-    BENCHMARK(BM_##name)->Apply(&BlockSizeArguments<width, value_type, memory_mode>::apply)
+    BENCHMARK(BM_##name)->Apply([](auto *benchmark) { \
+        BlockSizeArguments<width, value_type, memory_mode>::apply(benchmark); \
+    })
 
 #define BENCHMARK_COMPRESS_BLOCKS_REGISTER(name, width, memory_mode, value_type) \
-    BENCHMARK(BM_##name)->Apply(&BlockSizeArguments<width, value_type, memory_mode>::apply)
+    BENCHMARK(BM_##name)->Apply([](auto *benchmark) { \
+        BlockSizeArguments<width, value_type, memory_mode>::apply(benchmark); \
+    })
 
 
 template<uint8_t BIT_WIDTH, bool SIGN_VALUES, bool DISABLE_MEM, typename ValueT, typename Decompressor>
