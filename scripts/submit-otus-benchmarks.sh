@@ -14,6 +14,7 @@ benchmark_job_id="$(
     sbatch \
         --parsable \
         --array=0-3%4 \
+        --exclusive \
         "${JOB_SCRIPT}" \
         benchmark
 )"
@@ -31,6 +32,9 @@ model_job_id="$(
         --parsable \
         --dependency="afterok:${benchmark_job_id}" \
         --export="ALL,PERNIX_BENCHMARK_ARRAY_JOB_ID=${benchmark_job_id}" \
+        --cpus-per-task=1 \
+        --mem=8G \
+        --time=01:00:00 \
         --output="slurm-%x-%j.out" \
         "${JOB_SCRIPT}" \
         model

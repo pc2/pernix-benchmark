@@ -7,7 +7,6 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=192
 #SBATCH --mem=0
-#SBATCH --exclusive
 #SBATCH --time=04:00:00
 #SBATCH --output=slurm-%x-%A_%a.out
 
@@ -180,9 +179,13 @@ else
     )
 fi
 
-srun \
-    --exclusive \
-    --ntasks=1 \
-    --cpus-per-task="${SLURM_CPUS_PER_TASK}" \
-    --cpu-bind=cores \
-    "${command[@]}"
+srun_arguments=(
+    --ntasks=1
+    --cpus-per-task="${SLURM_CPUS_PER_TASK}"
+    --cpu-bind=cores
+)
+if [[ "${JOB_MODE}" == "benchmark" ]]; then
+    srun_arguments+=(--exclusive)
+fi
+
+srun "${srun_arguments[@]}" "${command[@]}"
