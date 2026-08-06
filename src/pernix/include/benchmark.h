@@ -154,10 +154,10 @@ void register_block_sizes(benchmark::Benchmark *benchmark) {
 }
 
 #define BENCHMARK_DECOMPRESS_BLOCKS_REGISTER(name, width, memory_mode, value_type) \
-    BENCHMARK(BM_##name)->Apply(register_block_sizes<width, value_type, memory_mode>)
+    BENCHMARK(BM_##name)->Apply(&register_block_sizes<width, value_type, memory_mode>)
 
 #define BENCHMARK_COMPRESS_BLOCKS_REGISTER(name, width, memory_mode, value_type) \
-    BENCHMARK(BM_##name)->Apply(register_block_sizes<width, value_type, memory_mode>)
+    BENCHMARK(BM_##name)->Apply(&register_block_sizes<width, value_type, memory_mode>)
 
 
 template<uint8_t BIT_WIDTH, bool SIGN_VALUES, bool DISABLE_MEM, typename ValueT, typename Decompressor>
