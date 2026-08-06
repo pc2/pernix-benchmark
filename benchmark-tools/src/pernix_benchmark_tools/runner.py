@@ -180,7 +180,12 @@ def _create_project(repository: Path, options: RunOptions) -> CMakeProject:
 
 
 def _collect_machine_state(repository: Path, output_dir: Path) -> None:
-    output_file = output_dir / "machinestate.json"
+    output_name = os.environ.get("PERNIX_MACHINE_STATE_FILENAME", "machinestate.json")
+    if Path(output_name).name != output_name or not output_name.endswith(".json"):
+        raise RuntimeError(
+            "PERNIX_MACHINE_STATE_FILENAME must be a JSON filename without directories"
+        )
+    output_file = output_dir / output_name
     command = ["machinestate", "-e", "-o", str(output_file)]
     logger.info("Collecting machine state information")
     try:

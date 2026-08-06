@@ -333,6 +333,28 @@ def test_machine_state_failure_warns_cleans_partial_file_and_continues(
     assert "MachineState collection failed" in caplog.text
 
 
+def test_machine_state_filename_can_be_isolated_for_parallel_jobs(
+    tmp_path: Path,
+) -> None:
+    from pernix_benchmark_tools import runner
+
+    with (
+        patch.dict(
+            "os.environ",
+            {"PERNIX_MACHINE_STATE_FILENAME": "machinestate_pernix_avx2.json"},
+        ),
+        patch.object(runner.subprocess, "run") as subprocess_run,
+    ):
+        runner._collect_machine_state(tmp_path, tmp_path)
+
+    assert subprocess_run.call_args.args[0] == [
+        "machinestate",
+        "-e",
+        "-o",
+        str(tmp_path / "machinestate_pernix_avx2.json"),
+    ]
+
+
 def test_collect_pcie_state_records_model_link_and_compiler(tmp_path: Path) -> None:
     from pernix_benchmark_tools import runner
 

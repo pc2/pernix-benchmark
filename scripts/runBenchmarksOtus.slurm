@@ -8,12 +8,13 @@
 #SBATCH --cpus-per-task=192
 #SBATCH --mem=0
 #SBATCH --exclusive
-#SBATCH --time=16:00:00
-#SBATCH --output=slurm-%x-%j.out
+#SBATCH --time=04:00:00
+#SBATCH --array=0-4%4
+#SBATCH --output=slurm-%x-%A_%a.out
 
 set -euo pipefail
 
-if [[ -z "${SLURM_JOB_ID:-}" ]]; then
+if [[ -z "${SLURM_JOB_ID:-}" || -z "${SLURM_ARRAY_JOB_ID:-}" || -z "${SLURM_ARRAY_TASK_ID:-}" ]]; then
     echo "This script must be submitted with sbatch." >&2
     exit 1
 fi
@@ -63,18 +64,29 @@ if [[ ! -x "${PYTHON_PROJECT}/.venv/bin/python" ]]; then
 fi
 
 BUILD_BASE="${TMPDIR:-/tmp}"
-BUILD_DIR="${BUILD_BASE}/pernix-benchmark-build-${SLURM_JOB_ID}"
-RESULT_DIR="${REPOSITORY_ROOT}/benchmark-results/otus-${SLURM_JOB_ID}"
+BUILD_DIR="${BUILD_BASE}/pernix-benchmark-build-${SLURM_ARRAY_JOB_ID}-${SLURM_ARRAY_TASK_ID}"
+RESULT_DIR="${REPOSITORY_ROOT}/benchmark-results/otus-${SLURM_ARRAY_JOB_ID}"
 BENCHMARK_MIN_TIME_SECONDS="${PERNIX_BENCHMARK_MIN_TIME_SECONDS:-0.25}"
 BENCHMARK_REPETITIONS="${PERNIX_BENCHMARK_REPETITIONS:-5}"
 BENCHMARK_MIN_WARMUP_TIME_SECONDS="${PERNIX_BENCHMARK_MIN_WARMUP_TIME_SECONDS:-0.05}"
+
+case "${SLURM_ARRAY_TASK_ID}" in
+    0) TASK_LABEL="AVX2"; TASK_KIND="kernel"; TASK_NAME="pernix_avx2"; TASK_ARGUMENTS=(pernix avx2) ;;
+    1) TASK_LABEL="AVX2+BMI2"; TASK_KIND="kernel"; TASK_NAME="pernix_bmi2"; TASK_ARGUMENTS=(pernix bmi2) ;;
+    2) TASK_LABEL="AVX-512-VBMI"; TASK_KIND="kernel"; TASK_NAME="pernix_avx512vbmi"; TASK_ARGUMENTS=(pernix avx512vbmi) ;;
+    3) TASK_LABEL="CP2K"; TASK_KIND="kernel"; TASK_NAME="cp2k"; TASK_ARGUMENTS=(cp2k) ;;
+    4) TASK_LABEL="instruction model"; TASK_KIND="model"; TASK_NAME="model"; TASK_ARGUMENTS=() ;;
+    *) echo "Unsupported array task ${SLURM_ARRAY_TASK_ID}." >&2; exit 2 ;;
+esac
+
+export PERNIX_MACHINE_STATE_FILENAME="machinestate_${TASK_NAME}.json"
 
 cleanup() {
     rm -rf -- "${BUILD_DIR}"
 }
 trap cleanup EXIT
 
-echo "Otus benchmark job ${SLURM_JOB_ID}"
+echo "Otus benchmark array ${SLURM_ARRAY_JOB_ID}, task ${SLURM_ARRAY_TASK_ID}/4 (${TASK_LABEL})"
 echo "Repository: ${REPOSITORY_ROOT}"
 echo "Build directory: ${BUILD_DIR}"
 echo "Result directory: ${RESULT_DIR}"
@@ -85,16 +97,26 @@ echo "Benchmark minimum warm-up: ${BENCHMARK_MIN_WARMUP_TIME_SECONDS} s"
 
 cd "${PYTHON_PROJECT}"
 
-command=(
-    python -m uv run --frozen --no-sync pernix-bench run
-    --jobs "${SLURM_CPUS_PER_TASK}"
-    --build-dir "${BUILD_DIR}"
-    --output-dir "${RESULT_DIR}"
-    --benchmark-min-time "${BENCHMARK_MIN_TIME_SECONDS}"
-    --benchmark-repetitions "${BENCHMARK_REPETITIONS}"
-    --benchmark-min-warmup-time "${BENCHMARK_MIN_WARMUP_TIME_SECONDS}"
-    --clean
-)
+if [[ "${TASK_KIND}" == "model" ]]; then
+    command=(
+        python -m uv run --frozen --no-sync pernix-bench model
+        --results-dir "${RESULT_DIR}"
+        --build-dir "${BUILD_DIR}"
+        --llvm-cpu "${PERNIX_LLVM_CPU}"
+    )
+else
+    command=(
+        python -m uv run --frozen --no-sync pernix-bench run
+        --jobs "${SLURM_CPUS_PER_TASK}"
+        --build-dir "${BUILD_DIR}"
+        --output-dir "${RESULT_DIR}"
+        --benchmark-min-time "${BENCHMARK_MIN_TIME_SECONDS}"
+        --benchmark-repetitions "${BENCHMARK_REPETITIONS}"
+        --benchmark-min-warmup-time "${BENCHMARK_MIN_WARMUP_TIME_SECONDS}"
+        --clean
+        "${TASK_ARGUMENTS[@]}"
+    )
+fi
 command+=("$@")
 
 srun \
