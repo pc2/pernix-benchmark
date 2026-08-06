@@ -1,19 +1,18 @@
 #include <benchmark.h>
-#include <pernix/x86/avx2/avx2_decompression.h>
-
+#include <pernix/arm64/sve2/decompression.h>
 
 template<uint8_t BIT_WIDTH, bool DISABLE_MEM, typename ValueT>
-class BenchmarkDecompressorAVX2 : public BenchmarkDecompressor<BIT_WIDTH, true, DISABLE_MEM, ValueT> {
+class BenchmarkDecompressorSVE2 : public BenchmarkDecompressor<BIT_WIDTH, true, DISABLE_MEM, ValueT> {
 public:
     int decompress_blocks(const uint8_t *input, const ValueT scale, ValueT *output, const uint32_t blocks) override {
-        return pernix::mm256_decompress_blocks_avx2<BIT_WIDTH, true, 64>(input, scale, output, blocks);
+        return pernix::arm64::sve2::sve2_decompress_blocks<BIT_WIDTH, true, 64>(input, scale, output, blocks);
     }
 };
 
-#define BENCHMARK_DECOMPRESS_BLOCKS_AVX2_FUNCTION(N, MEM, TYPE, TAG) \
+#define BENCHMARK_DECOMPRESS_BLOCKS_SVE2_FUNCTION(N, MEM, TYPE, TAG) \
 static void BM_decompress_##TAG##_##MEM##_##N(benchmark::State& state) { \
-BM_decompress_blocks<N, true, MEM, TYPE, BenchmarkDecompressorAVX2<N, MEM, TYPE>>(state); \
-}                                                              \
+    BM_decompress_blocks<N, true, MEM, TYPE, BenchmarkDecompressorSVE2<N, MEM, TYPE>>(state); \
+} \
 BENCHMARK_DECOMPRESS_BLOCKS_REGISTER(decompress_##TAG##_##MEM##_##N, N, MEM, TYPE);
 
 #define PERNIX_FOR_EACH_BIT_WIDTH(M, MEM, TYPE, TAG) \
@@ -42,10 +41,10 @@ M(22, MEM, TYPE, TAG); \
 M(23, MEM, TYPE, TAG); \
 M(24, MEM, TYPE, TAG)
 
-PERNIX_FOR_EACH_BIT_WIDTH(BENCHMARK_DECOMPRESS_BLOCKS_AVX2_FUNCTION, true, float, avx2f32)
-PERNIX_FOR_EACH_BIT_WIDTH(BENCHMARK_DECOMPRESS_BLOCKS_AVX2_FUNCTION, false, float, avx2f32)
-PERNIX_FOR_EACH_BIT_WIDTH(BENCHMARK_DECOMPRESS_BLOCKS_AVX2_FUNCTION, true, double, avx2f64)
-PERNIX_FOR_EACH_BIT_WIDTH(BENCHMARK_DECOMPRESS_BLOCKS_AVX2_FUNCTION, false, double, avx2f64)
+PERNIX_FOR_EACH_BIT_WIDTH(BENCHMARK_DECOMPRESS_BLOCKS_SVE2_FUNCTION, true, float, sve2f32)
+PERNIX_FOR_EACH_BIT_WIDTH(BENCHMARK_DECOMPRESS_BLOCKS_SVE2_FUNCTION, false, float, sve2f32)
+PERNIX_FOR_EACH_BIT_WIDTH(BENCHMARK_DECOMPRESS_BLOCKS_SVE2_FUNCTION, true, double, sve2f64)
+PERNIX_FOR_EACH_BIT_WIDTH(BENCHMARK_DECOMPRESS_BLOCKS_SVE2_FUNCTION, false, double, sve2f64)
 
 #undef PERNIX_FOR_EACH_BIT_WIDTH
-#undef BENCHMARK_DECOMPRESS_BLOCKS_AVX2_FUNCTION
+#undef BENCHMARK_DECOMPRESS_BLOCKS_SVE2_FUNCTION

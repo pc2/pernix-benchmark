@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.30)
 project(libcompression VERSION 0.1.0 LANGUAGES CXX C Fortran)
 
+include(CTest)
+
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 
 find_program(CCACHE_PROGRAM ccache)
@@ -14,6 +16,11 @@ set(BENCHMARK_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD ${BENCHMARK_CXX_STANDARD})
 set(CMAKE_CXX_STANDARD_REQUIRED YES)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+add_library(pernix_benchmark_optimization INTERFACE)
+target_compile_options(pernix_benchmark_optimization INTERFACE
+        $<$<COMPILE_LANGUAGE:C,CXX,Fortran>:-O3>
+)
 
 add_subdirectory(external)
 

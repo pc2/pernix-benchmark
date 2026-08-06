@@ -1,12 +1,12 @@
 #include <benchmark.h>
-#include <pernix/pernix.h>
+#include <pernix/x86/bmi2/bmi2_decompression.h>
 
 
 template<uint8_t BIT_WIDTH, bool DISABLE_MEM, typename ValueT>
 class BenchmarkDecompressorBMI2 : public BenchmarkDecompressor<BIT_WIDTH, true, DISABLE_MEM, ValueT> {
 public:
-    int decompress(const uint8_t *input, const ValueT scale, ValueT *output) override {
-        return pernix::mm256_decompress_block_bmi2<BIT_WIDTH>(input, scale, output);
+    int decompress_blocks(const uint8_t *input, const ValueT scale, ValueT *output, const uint32_t blocks) override {
+        return pernix::mm256_decompress_blocks_bmi2<BIT_WIDTH, true, 64>(input, scale, output, blocks);
     }
 };
 
@@ -14,7 +14,7 @@ public:
 static void BM_decompress_##TAG##_##MEM##_##N(benchmark::State& state) { \
 BM_decompress_blocks<N, true, MEM, TYPE, BenchmarkDecompressorBMI2<N, MEM, TYPE>>(state); \
 }                                                              \
-BENCHMARK_DECOMPRESS_BLOCKS_REGISTER(decompress_##TAG##_##MEM##_##N);
+BENCHMARK_DECOMPRESS_BLOCKS_REGISTER(decompress_##TAG##_##MEM##_##N, N, MEM, TYPE);
 
 #define PERNIX_FOR_EACH_BIT_WIDTH(M, MEM, TYPE, TAG) \
 M(1, MEM, TYPE, TAG); \

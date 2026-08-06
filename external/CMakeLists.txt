@@ -69,6 +69,7 @@ set(CP2K_SOURCE_FILES
 )
 
 add_library(cp2k_compression STATIC ${CP2K_SOURCE_FILES})
+target_link_libraries(cp2k_compression PRIVATE pernix_benchmark_optimization)
 target_compile_options(cp2k_compression PRIVATE $<$<COMPILE_LANGUAGE:Fortran>:-ffree-form -ffree-line-length-none -g -march=native>)
 target_compile_definitions(cp2k_compression PRIVATE
         $<$<COMPILE_LANGUAGE:Fortran>:__SHORT_FILE__=\"__FILE__\">

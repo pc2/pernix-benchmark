@@ -1,81 +1,102 @@
-#include <benchmark/benchmark.h>
+#include <benchmark.h>
 
-using namespace benchmark;
-using namespace benchmark::internal;
+#include <cstdint>
+#include <type_traits>
 
 extern "C" {
-double cp2k_compression(State &state, int iterations, int width, int blocks);
-
-double cp2k_decompression(State &state, int iterations, int width, int blocks);
+void cp2k_compress_block_f32(const float* input, float scale, std::int64_t* packed, int bit_width);
+void cp2k_decompress_block_f32(const std::int64_t* packed, float scale, float* output, int bit_width);
+void cp2k_compress_block_f64(const double* input, double scale, std::int64_t* packed, int bit_width);
+void cp2k_decompress_block_f64(const std::int64_t* packed, double scale, double* output, int bit_width);
 }
 
-template<class... Args>
-void BM_cp2k_compression(State &state, Args &&... args) {
-    auto args_tuple = std::make_tuple(std::move(args)...);
-    const int width = std::get<0>(args_tuple);
-    const int blocks = state.range(0);
-    constexpr uint32_t internal_iterations = 1 << 4; // 16
-    const int elements_per_block = 512 / width;
+template <std::uint8_t BIT_WIDTH, bool DISABLE_MEM, typename ValueT>
+class BenchmarkCompressorCP2K : public BenchmarkCompressor<BIT_WIDTH, DISABLE_MEM, ValueT> {
+    static_assert(std::is_same_v<ValueT, float> || std::is_same_v<ValueT, double>);
 
-    for (auto _: state) {
-        const double time = cp2k_compression(state, internal_iterations, width, blocks);
-        state.SetIterationTime(time);
+public:
+    int compress_blocks(const ValueT* input, const ValueT scale, std::uint8_t* output, const std::uint32_t blocks) override {
+        constexpr std::size_t elements_per_block = 512 / BIT_WIDTH;
+        for (std::uint32_t block = 0; block < blocks; ++block) {
+            if constexpr (std::is_same_v<ValueT, float>) {
+                cp2k_compress_block_f32(input, scale, reinterpret_cast<std::int64_t*>(output), BIT_WIDTH);
+            } else {
+                cp2k_compress_block_f64(input, scale, reinterpret_cast<std::int64_t*>(output), BIT_WIDTH);
+            }
+            input += elements_per_block;
+            output += 64;
+        }
+        return 0;
     }
+};
 
-    const int64_t total_iterations = internal_iterations * state.iterations();
+template <std::uint8_t BIT_WIDTH, bool DISABLE_MEM, typename ValueT>
+class BenchmarkDecompressorCP2K : public BenchmarkDecompressor<BIT_WIDTH, true, DISABLE_MEM, ValueT> {
+    static_assert(std::is_same_v<ValueT, float> || std::is_same_v<ValueT, double>);
 
-    const double bytes_processed = (blocks * elements_per_block) * static_cast<double>(total_iterations) * (
-                                       4 + (static_cast<float>(width) / 8));
-
-    state.SetItemsProcessed(total_iterations * blocks);
-    state.SetBytesProcessed(static_cast<int64_t>(bytes_processed));
-}
-
-template<class... Args>
-void BM_cp2k_decompression(State &state, Args &&... args) {
-    auto args_tuple = std::make_tuple(std::move(args)...);
-    const int width = std::get<0>(args_tuple);
-    const int blocks = state.range(0);
-    constexpr uint32_t internal_iterations = 1 << 10; // 1024
-    const int elements_per_block = 512 / width;
-
-    for (auto _: state) {
-        const double time = cp2k_decompression(state, internal_iterations, width, blocks);
-        state.SetIterationTime(time);
+public:
+    int decompress_blocks(const std::uint8_t* input, const ValueT scale, ValueT* output, const std::uint32_t blocks) override {
+        constexpr std::size_t elements_per_block = 512 / BIT_WIDTH;
+        for (std::uint32_t block = 0; block < blocks; ++block) {
+            if constexpr (std::is_same_v<ValueT, float>) {
+                cp2k_decompress_block_f32(reinterpret_cast<const std::int64_t*>(input), scale, output, BIT_WIDTH);
+            } else {
+                cp2k_decompress_block_f64(reinterpret_cast<const std::int64_t*>(input), scale, output, BIT_WIDTH);
+            }
+            input += 64;
+            output += elements_per_block;
+        }
+        return 0;
     }
+};
 
-    const int64_t total_iterations = internal_iterations * state.iterations();
+#define BENCHMARK_CP2K_FOR_MODE(N, TAG, TYPE, MEM)                                                \
+    static void BM_compress_cp2k##TAG##_##MEM##_##N(benchmark::State& state) {                    \
+        BM_compress_blocks<N, true, MEM, TYPE, BenchmarkCompressorCP2K<N, MEM, TYPE>>(state);     \
+    }                                                                                             \
+    BENCHMARK_COMPRESS_BLOCKS_REGISTER(compress_cp2k##TAG##_##MEM##_##N, N, MEM, TYPE);           \
+    static void BM_decompress_cp2k##TAG##_##MEM##_##N(benchmark::State& state) {                  \
+        BM_decompress_blocks<N, true, MEM, TYPE, BenchmarkDecompressorCP2K<N, MEM, TYPE>>(state); \
+    }                                                                                             \
+    BENCHMARK_DECOMPRESS_BLOCKS_REGISTER(decompress_cp2k##TAG##_##MEM##_##N, N, MEM, TYPE);
 
-    const double bytes_processed = (blocks * elements_per_block) * static_cast<double>(total_iterations) * (
-                                       4 + (static_cast<float>(width) / 8));
+#define BENCHMARK_CP2K_FOR_TYPE(N, TAG, TYPE)    \
+    BENCHMARK_CP2K_FOR_MODE(N, TAG, TYPE, true); \
+    BENCHMARK_CP2K_FOR_MODE(N, TAG, TYPE, false)
 
-    state.SetItemsProcessed(total_iterations * blocks);
-    state.SetBytesProcessed(static_cast<int64_t>(bytes_processed));
-}
+#define BENCHMARK_CP2K(N)                   \
+    BENCHMARK_CP2K_FOR_TYPE(N, f32, float); \
+    BENCHMARK_CP2K_FOR_TYPE(N, f64, double)
 
-BENCHMARK_CAPTURE(BM_cp2k_compression, width8, 8)->RangeMultiplier(2)->Range(1 << 0, 1 << 22)->UseManualTime();
-BENCHMARK_CAPTURE(BM_cp2k_decompression, width8, 8)->RangeMultiplier(2)->Range(1 << 0, 1 << 22)->UseManualTime();
+#define CP2K_FOR_EACH_BIT_WIDTH(M) \
+    M(1);                          \
+    M(2);                          \
+    M(3);                          \
+    M(4);                          \
+    M(5);                          \
+    M(6);                          \
+    M(7);                          \
+    M(8);                          \
+    M(9);                          \
+    M(10);                         \
+    M(11);                         \
+    M(12);                         \
+    M(13);                         \
+    M(14);                         \
+    M(15);                         \
+    M(16);                         \
+    M(17);                         \
+    M(18);                         \
+    M(19);                         \
+    M(20);                         \
+    M(21);                         \
+    M(22);                         \
+    M(23);                         \
+    M(24)
 
-BENCHMARK_CAPTURE(BM_cp2k_compression, width9, 9)->RangeMultiplier(2)->Range(1 << 0, 1 << 22)->UseManualTime();
-BENCHMARK_CAPTURE(BM_cp2k_decompression, width9, 9)->RangeMultiplier(2)->Range(1 << 0, 1 << 22)->UseManualTime();
+CP2K_FOR_EACH_BIT_WIDTH(BENCHMARK_CP2K);
 
-BENCHMARK_CAPTURE(BM_cp2k_compression, width10, 10)->RangeMultiplier(2)->Range(1 << 0, 1 << 22)->UseManualTime();
-BENCHMARK_CAPTURE(BM_cp2k_decompression, width10, 10)->RangeMultiplier(2)->Range(1 << 0, 1 << 22)->UseManualTime();
-
-BENCHMARK_CAPTURE(BM_cp2k_compression, width11, 11)->RangeMultiplier(2)->Range(1 << 0, 1 << 22)->UseManualTime();
-BENCHMARK_CAPTURE(BM_cp2k_decompression, width11, 11)->RangeMultiplier(2)->Range(1 << 0, 1 << 22)->UseManualTime();
-
-BENCHMARK_CAPTURE(BM_cp2k_compression, width12, 12)->RangeMultiplier(2)->Range(1 << 0, 1 << 22)->UseManualTime();
-BENCHMARK_CAPTURE(BM_cp2k_decompression, width12, 12)->RangeMultiplier(2)->Range(1 << 0, 1 << 22)->UseManualTime();
-
-BENCHMARK_CAPTURE(BM_cp2k_compression, width13, 13)->RangeMultiplier(2)->Range(1 << 0, 1 << 22)->UseManualTime();
-BENCHMARK_CAPTURE(BM_cp2k_decompression, width13, 13)->RangeMultiplier(2)->Range(1 << 0, 1 << 22)->UseManualTime();
-
-BENCHMARK_CAPTURE(BM_cp2k_compression, width14, 14)->RangeMultiplier(2)->Range(1 << 0, 1 << 22)->UseManualTime();
-BENCHMARK_CAPTURE(BM_cp2k_decompression, width14, 14)->RangeMultiplier(2)->Range(1 << 0, 1 << 22)->UseManualTime();
-
-BENCHMARK_CAPTURE(BM_cp2k_compression, width15, 15)->RangeMultiplier(2)->Range(1 << 0, 1 << 22)->UseManualTime();
-BENCHMARK_CAPTURE(BM_cp2k_decompression, width15, 15)->RangeMultiplier(2)->Range(1 << 0, 1 << 22)->UseManualTime();
-
-BENCHMARK_CAPTURE(BM_cp2k_compression, width16, 16)->RangeMultiplier(2)->Range(1 << 0, 1 << 22)->UseManualTime();
-BENCHMARK_CAPTURE(BM_cp2k_decompression, width16, 16)->RangeMultiplier(2)->Range(1 << 0, 1 << 22)->UseManualTime();
+#undef CP2K_FOR_EACH_BIT_WIDTH
+#undef BENCHMARK_CP2K
+#undef BENCHMARK_CP2K_FOR_TYPE
+#undef BENCHMARK_CP2K_FOR_MODE
