@@ -18,6 +18,20 @@ MODEL = "#9AA0A6"
 CACHE_FILL = "#E8EBF0"
 GRID = "#D9DEE7"
 TEXT = "#1F2937"
+PCIE_CODEC_COLORS = {
+    1: DECOMPRESSION,
+    2: COMPRESSION,
+    4: "#4A9DD5",
+    8: "#8BC5E8",
+}
+PCIE_TRANSFER = "#167D8D"
+PCIE_UNCOMPRESSED = "#596579"
+ISA_COLORS = {
+    "AVX2": "#4A9DD5",
+    "AVX2+BMI2": PCIE_TRANSFER,
+    "AVX-512-VBMI": DECOMPRESSION,
+}
+CP2K_COLOR = "#7067A8"
 
 INCORE_COLUMNS = [
     "operation",
@@ -265,22 +279,17 @@ def plot_incore_throughput(data: pd.DataFrame) -> plt.Figure:
     figure, axes = plt.subplots(
         1, 2, figsize=(12.6, 4.8), sharey=True, constrained_layout=True
     )
-    measured_styles = {
-        "AVX2": ("o", 2.4),
-        "AVX2+BMI2": ("^", 2.4),
-        "AVX-512-VBMI": ("s", 2.4),
-    }
+    measured_markers = {"AVX2": "o", "AVX2+BMI2": "^", "AVX-512-VBMI": "D"}
     model_styles = {
         "AVX2": ("o", ":"),
-        "AVX-512-VBMI": ("s", "--"),
+        "AVX-512-VBMI": ("D", "--"),
     }
-    operation_colors = {"compression": COMPRESSION, "decompression": DECOMPRESSION}
 
     for axis, operation in zip(axes, ("compression", "decompression"), strict=True):
         subset = data[data["operation"].eq(operation)]
         for width in (8, 16, 24):
             axis.axvspan(width - 0.16, width + 0.16, color=CACHE_FILL, zorder=0)
-        for isa, (marker, linewidth) in measured_styles.items():
+        for isa, marker in measured_markers.items():
             series = subset[
                 subset["kind"].eq("measured") & subset["isa"].eq(isa)
             ]
@@ -289,10 +298,10 @@ def plot_incore_throughput(data: pd.DataFrame) -> plt.Figure:
             axis.plot(
                 series["bit_width"],
                 series["values_per_second"] / 1e9,
-                color=operation_colors[operation],
+                color=ISA_COLORS[isa],
                 marker=marker,
                 markersize=5.5,
-                linewidth=linewidth,
+                linewidth=2.4,
                 label=isa,
                 zorder=3,
             )
@@ -301,9 +310,10 @@ def plot_incore_throughput(data: pd.DataFrame) -> plt.Figure:
             axis.plot(
                 series["bit_width"],
                 series["values_per_second"] / 1e9,
-                color=MODEL,
+                color=ISA_COLORS[isa],
                 marker=marker,
                 markerfacecolor="white",
+                markeredgewidth=1.3,
                 markersize=4.5,
                 linewidth=1.6,
                 linestyle=linestyle,
@@ -326,7 +336,15 @@ def plot_incore_throughput(data: pd.DataFrame) -> plt.Figure:
             fontsize=8.5,
         )
     axes[0].set_ylabel("Throughput [Gvalues/s]")
-    axes[1].legend(loc="upper right", fontsize=8.5, ncols=1)
+    handles, labels = axes[1].get_legend_handles_labels()
+    figure.legend(
+        handles,
+        labels,
+        loc="outside lower center",
+        ncols=len(labels),
+        fontsize=8.5,
+        frameon=False,
+    )
     return figure
 
 
@@ -496,8 +514,11 @@ def plot_host_memory_throughput(
     figure, axes = plt.subplots(
         1, 2, figsize=(12.6, 5.2), sharey=False, constrained_layout=True
     )
-    markers = {7: "o", 13: "s", 21: "^"}
-    colors = {"compression": COMPRESSION, "decompression": DECOMPRESSION}
+    width_styles = {
+        7: (ISA_COLORS["AVX2"], "o"),
+        13: (ISA_COLORS["AVX-512-VBMI"], "D"),
+        21: (ISA_COLORS["AVX2+BMI2"], "^"),
+    }
     cache_edges = [
         ("L1", float(caches["l1"]["bytes"]), caches["l1"]),
         ("L2", float(caches["l2"]["bytes"]), caches["l2"]),
@@ -551,7 +572,7 @@ def plot_host_memory_throughput(
                     alpha=0.9,
                     zorder=2,
                 )
-        for width in (7, 13, 21):
+        for width, (color, marker) in width_styles.items():
             series = operation_data[
                 operation_data["isa"].eq("AVX-512-VBMI")
                 & operation_data["bit_width"].eq(width)
@@ -559,8 +580,8 @@ def plot_host_memory_throughput(
             axis.plot(
                 series["working_set_bytes"],
                 series["logical_bytes_per_second"] / 1e9,
-                color=colors[operation],
-                marker=markers[width],
+                color=color,
+                marker=marker,
                 markersize=5.5,
                 linewidth=2.8 if width == 13 else 2.4,
                 label=f"N={width}",
@@ -571,11 +592,11 @@ def plot_host_memory_throughput(
             axis.plot(
                 cp2k["working_set_bytes"],
                 cp2k["logical_bytes_per_second"] / 1e9,
-                color=BASELINE,
-                marker="s",
-                markerfacecolor="white",
-                markersize=5.0,
-                linewidth=1.6,
+                color=CP2K_COLOR,
+                marker="X",
+                markersize=5.5,
+                linewidth=1.8,
+                linestyle="--",
                 label="CP2K, N=13",
                 zorder=2,
             )
@@ -597,10 +618,9 @@ def plot_host_memory_throughput(
                 axis.plot(
                     measured_bound["working_set_bytes"],
                     logical_bound,
-                    color=BASELINE,
-                    linestyle="--",
-                    linewidth=1.6,
-                    alpha=0.75,
+                    color=PCIE_UNCOMPRESSED,
+                    linestyle=":",
+                    linewidth=2.0,
                     label="LIKWID copy bound (N=12)",
                     zorder=2,
                 )
@@ -611,10 +631,9 @@ def plot_host_memory_throughput(
             )
             axis.axhline(
                 bound / 1e9,
-                color=BASELINE,
-                linestyle="--",
-                linewidth=1.5,
-                alpha=0.45,
+                color=PCIE_UNCOMPRESSED,
+                linestyle=":",
+                linewidth=2.0,
                 label="Memory bound (N=12)",
             )
         # Keep the upper part of the axes clear for the cache-region labels.
@@ -758,61 +777,59 @@ def plot_pcie_end_to_end(
     figure, axes = plt.subplots(
         1, 2, figsize=(12.6, 4.8), sharey=True, constrained_layout=True
     )
-    colors = {"H2D": COMPRESSION, "D2H": DECOMPRESSION}
     for axis, direction in zip(axes, ("H2D", "D2H"), strict=True):
         subset = summary[summary["direction"].eq(direction)].sort_values("bit_width")
         widths = subset["bit_width"]
-        total_ms = subset["total_seconds"] * 1e3
         codec_ms = subset["codec_seconds"] * 1e3
         transfer_ms = subset["transfer_seconds"] * 1e3
         baseline_ms = float(subset["uncompressed_seconds"].median() * 1e3)
         axis.plot(
             widths,
-            total_ms,
-            color=colors[direction],
-            linewidth=2.4,
-            marker="o",
-            markersize=5.5,
-            label="Compressed pipeline",
-        )
-        axis.plot(
-            widths,
             codec_ms,
-            color=BASELINE,
-            linewidth=1.6,
-            linestyle="--",
-            label="CPU codec",
+            color=PCIE_CODEC_COLORS[1],
+            linewidth=2.3,
+            marker="o",
+            markersize=4.8,
+            label="CPU codec (1 core, measured)",
         )
+        for cores, linestyle in ((2, "--"), (4, "-."), (8, ":")):
+            axis.plot(
+                widths,
+                codec_ms / cores,
+                color=PCIE_CODEC_COLORS[cores],
+                linewidth=1.9,
+                linestyle=linestyle,
+                label=f"CPU codec ({cores} cores, ideal)",
+            )
         axis.plot(
             widths,
             transfer_ms,
-            color=BASELINE,
-            linewidth=1.6,
-            linestyle=":",
+            color=PCIE_TRANSFER,
+            linewidth=2.1,
             label="PCIe transfer",
         )
         axis.axhline(
             baseline_ms,
-            color=BASELINE,
-            linewidth=1.7,
+            color=PCIE_UNCOMPRESSED,
+            linewidth=1.8,
+            linestyle="--",
             label="Uncompressed transfer",
-        )
-        axis.fill_between(
-            widths,
-            total_ms,
-            baseline_ms,
-            where=total_ms < baseline_ms,
-            color=colors[direction],
-            alpha=0.12,
-            interpolate=True,
         )
         axis.set_title(direction)
         axis.set_xlabel("Bit width N")
         axis.set_xticks(range(2, 25, 2))
         axis.grid(axis="y", color=GRID, linewidth=0.8)
         axis.spines[["top", "right"]].set_visible(False)
-    axes[0].set_ylabel("End-to-end runtime [ms]")
-    axes[1].legend(loc="best", fontsize=8.5)
+    axes[0].set_ylabel("Runtime for 1 GiB original data [ms]")
+    handles, labels = axes[1].get_legend_handles_labels()
+    figure.legend(
+        handles,
+        labels,
+        loc="outside lower center",
+        ncols=3,
+        fontsize=8.5,
+        frameon=False,
+    )
     return figure
 
 

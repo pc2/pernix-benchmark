@@ -79,6 +79,26 @@ def test_prepares_and_plots_incore_data() -> None:
 
     figure = plot_incore_throughput(data)
     assert tuple(figure.get_size_inches()) == (12.6, 4.8)
+    plotted = {
+        line.get_label(): line
+        for line in figure.axes[0].lines
+        if not line.get_label().startswith("_")
+    }
+    assert plotted["AVX2"].get_marker() == "o"
+    assert plotted["AVX2+BMI2"].get_marker() == "^"
+    assert plotted["AVX-512-VBMI"].get_marker() == "D"
+    assert len(
+        {
+            plotted[isa].get_color()
+            for isa in ("AVX2", "AVX2+BMI2", "AVX-512-VBMI")
+        }
+    ) == 3
+    for isa in ("AVX2", "AVX-512-VBMI"):
+        assert plotted[f"{isa} model"].get_color() == plotted[isa].get_color()
+        assert plotted[f"{isa} model"].get_markerfacecolor() == "white"
+        assert plotted[f"{isa} model"].get_linestyle() != "-"
+    assert len(figure.legends) == 1
+    assert not figure.axes[1].get_legend()
     plt.close(figure)
 
 
@@ -144,6 +164,20 @@ def test_prepares_host_memory_data_and_cache_metadata() -> None:
     assert plotted_maximum / figure.axes[0].get_ylim()[1] <= 0.84 + 1e-12
     legend_labels = figure.axes[1].get_legend_handles_labels()[1]
     assert "LIKWID copy bound (N=12)" in legend_labels
+    plotted = {
+        line.get_label(): line
+        for line in figure.axes[0].lines
+        if not line.get_label().startswith("_")
+    }
+    assert {plotted[f"N={width}"].get_marker() for width in (7, 13, 21)} == {
+        "o",
+        "D",
+        "^",
+    }
+    assert len({plotted[f"N={width}"].get_color() for width in (7, 13, 21)}) == 3
+    assert plotted["CP2K, N=13"].get_marker() == "X"
+    assert plotted["CP2K, N=13"].get_linestyle() == "--"
+    assert plotted["LIKWID copy bound (N=12)"].get_linestyle() == ":"
     assert len(figure.legends) == 1
     assert not figure.axes[1].get_legend()
     plt.close(figure)
@@ -209,4 +243,24 @@ def test_prepares_and_plots_pcie_data() -> None:
     assert (data["original_bytes"] <= 2**30).all()
     figure = plot_pcie_end_to_end(data)
     assert tuple(figure.get_size_inches()) == (12.6, 4.8)
+    plotted = {
+        line.get_label(): line
+        for line in figure.axes[0].lines
+    }
+    expected_labels = {
+        "CPU codec (1 core, measured)",
+        "CPU codec (2 cores, ideal)",
+        "CPU codec (4 cores, ideal)",
+        "CPU codec (8 cores, ideal)",
+        "PCIe transfer",
+        "Uncompressed transfer",
+    }
+    assert set(plotted) == expected_labels
+    measured = plotted["CPU codec (1 core, measured)"].get_ydata()
+    for cores in (2, 4, 8):
+        theoretical = plotted[f"CPU codec ({cores} cores, ideal)"].get_ydata()
+        assert (theoretical == measured / cores).all()
+    assert len({line.get_color() for line in plotted.values()}) == len(plotted)
+    assert len(figure.legends) == 1
+    assert not figure.axes[1].get_legend()
     plt.close(figure)

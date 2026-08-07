@@ -38,6 +38,8 @@ The runner configures and builds the selected CMake targets, captures machine me
 
 Pernix benchmark iterations call the native multi-block kernels with one scale for the complete batch. This avoids per-block framework dispatch overhead and follows the Pernix multi-block API contract. CP2K uses the same 512-bit block, value-type, bit-width, and memory-mode dimensions so its results can be compared with Pernix.
 
+The PCIe suite uses two pinned 1 MiB staging buffers. H2D runs overlap compression of the next chunk with the current DMA transfer; D2H runs overlap the next DMA transfer with decompression of the current chunk. The reported pipeline runtime is therefore wall-clock end-to-end time, while `codec_seconds` and `dma_seconds` are component-work measurements and are not expected to add up to it.
+
 See the [benchmark tools guide](benchmark-tools/README.md) for CLI options, supported implementations, instruction modeling, and CUDA requirements. Otus setup and submission are covered by the separate [Slurm guide](slurm/README.md).
 
 ## Licensing
