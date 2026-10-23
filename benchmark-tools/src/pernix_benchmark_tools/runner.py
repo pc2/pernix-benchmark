@@ -387,6 +387,11 @@ def run_cp2k(options: RunOptions) -> int:
     return 0
 
 
+def run_libxs(options: RunOptions) -> int:
+    _run_targets(("libxs",), options)
+    return 0
+
+
 def run_pcie(
     variant: str | None,
     options: RunOptions,
@@ -421,7 +426,7 @@ def run_all(
     host: HostCapabilities | None = None,
 ) -> int:
     selected = select_pernix_variants(None, host or detect_host())
-    targets = tuple(f"pernix_{name}" for name in selected) + ("cp2k",)
+    targets = tuple(f"pernix_{name}" for name in selected) + ("cp2k", "libxs")
     output_dir = _run_targets(targets, options)
     if {"avx2", "avx512vbmi"}.issubset(selected):
         repository = find_repository_root()

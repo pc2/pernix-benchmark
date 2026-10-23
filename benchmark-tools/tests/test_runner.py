@@ -15,6 +15,7 @@ from pernix_benchmark_tools.runner import (
     resolve_build_dir,
     resolve_output_dir,
     run_all,
+    run_libxs,
     run_pcie,
     run_pernix,
     select_pernix_variants,
@@ -120,9 +121,19 @@ def test_run_all_maps_supported_pernix_targets_and_cp2k() -> None:
 
     assert result == 0
     run_targets.assert_called_once_with(
-        ("pernix_fallback", "pernix_avx2", "cp2k"),
+        ("pernix_fallback", "pernix_avx2", "cp2k", "libxs"),
         options,
     )
+
+
+def test_run_libxs_maps_to_benchmark_target() -> None:
+    options = RunOptions()
+
+    with patch("pernix_benchmark_tools.runner._run_targets") as run_targets:
+        result = run_libxs(options)
+
+    assert result == 0
+    run_targets.assert_called_once_with(("libxs",), options)
 
 
 def test_run_all_generates_complete_x86_instruction_model(tmp_path: Path) -> None:

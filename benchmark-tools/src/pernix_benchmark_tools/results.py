@@ -31,6 +31,11 @@ PCIE_BENCHMARK_RE = re.compile(
 PCIE_RESULT_RE = re.compile(
     r"^benchmark_pcie_(?P<implementation>[A-Za-z0-9]+)_results\.json$"
 )
+LIBXS_BENCHMARK_RE = re.compile(
+    r"^BM_libxs_(?P<direction>compress|decompress)_"
+    r"(?P<value_type>[iu](?:8|16|32|64))_"
+    r"(?P<profile>broad|sparse)_g(?P<group>\d+)/(?P<elements>\d+)$"
+)
 ResultFamily = Literal["kernel", "pcie"]
 
 
@@ -131,6 +136,22 @@ def _parse_pcie(frame: pd.DataFrame, path: Path, implementation: str) -> pd.Data
     return extracted
 
 
+def _parse_libxs(frame: pd.DataFrame, path: Path) -> pd.DataFrame:
+    extracted = _names_for_parsing(frame).str.extract(LIBXS_BENCHMARK_RE)
+    _require_matches(frame["name"], extracted, path.name)
+    extracted["direction"] = extracted["direction"].map(
+        {"compress": "compression", "decompress": "decompression"}
+    )
+    extracted["implementation"] = "libxs"
+    extracted["bit_width"] = extracted["value_type"].str.extract(r"(8|16|32|64)$")
+    extracted["group"] = pd.to_numeric(extracted["group"], errors="raise")
+    extracted["blocks"] = pd.NA
+    extracted["core_throughput"] = False
+    extracted["memory_mode"] = "full"
+    extracted["benchmark_schema"] = "libxs_vpack_v1"
+    return extracted
+
+
 def _normalize_file(path: Path) -> tuple[pd.DataFrame, dict[str, object]]:
     frame, context = _read_result(path)
     if "name" not in frame:
@@ -144,6 +165,8 @@ def _normalize_file(path: Path) -> tuple[pd.DataFrame, dict[str, object]]:
         extracted = _parse_pernix(frame, path, pernix_match.group("implementation"))
     elif path.name == "benchmark_cp2k_results.json":
         extracted = _parse_cp2k(frame, path)
+    elif path.name == "benchmark_libxs_results.json":
+        extracted = _parse_libxs(frame, path)
     else:
         raise ValueError(f"Unsupported benchmark result filename: {path.name}")
 
@@ -158,13 +181,25 @@ def _normalize_file(path: Path) -> tuple[pd.DataFrame, dict[str, object]]:
         normalized["bit_width"], errors="raise"
     ).astype("int64")
     normalized["blocks"] = pd.to_numeric(normalized["blocks"], errors="raise").astype(
-        "int64"
+        "Int64"
     )
+    if "elements" not in normalized:
+        normalized["elements"] = pd.NA
+    normalized["elements"] = pd.to_numeric(
+        normalized["elements"], errors="coerce"
+    ).astype("Int64")
     if "payload_bytes" not in normalized:
         normalized["payload_bytes"] = pd.NA
     normalized["payload_bytes"] = pd.to_numeric(
         normalized["payload_bytes"], errors="coerce"
     ).astype("Int64")
+    if "group" not in normalized:
+        normalized["group"] = pd.NA
+    normalized["group"] = pd.to_numeric(normalized["group"], errors="coerce").astype(
+        "Int64"
+    )
+    if "profile" not in normalized:
+        normalized["profile"] = pd.NA
     normalized["bytes_per_second"] = pd.to_numeric(
         normalized["bytes_per_second"], errors="raise"
     )
@@ -207,8 +242,11 @@ def load_benchmark_results(
             "direction",
             "value_type",
             "memory_mode",
+            "profile",
+            "group",
             "bit_width",
             "blocks",
+            "elements",
             "payload_bytes",
             "implementation",
         ],
@@ -229,7 +267,12 @@ def load_benchmark_contexts(
         implementation = (
             "cp2k"
             if path.name == "benchmark_cp2k_results.json"
-            else (PCIE_RESULT_RE.fullmatch(path.name) or PERNIX_RESULT_RE.fullmatch(path.name)).group("implementation")  # type: ignore[union-attr]
+            else "libxs"
+            if path.name == "benchmark_libxs_results.json"
+            else (
+                PCIE_RESULT_RE.fullmatch(path.name)
+                or PERNIX_RESULT_RE.fullmatch(path.name)
+            ).group("implementation")  # type: ignore[union-attr]
         )
         rows.append(
             {

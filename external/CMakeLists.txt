@@ -9,6 +9,22 @@
 find_package(Git REQUIRED)
 find_package(OpenMP)
 
+# libxs ships its own tests under BUILD_TESTING. Keep those from inheriting
+# this repository's CTest setting; the benchmark only needs the library target.
+set(PERNIX_BENCHMARK_BUILD_TESTING ${BUILD_TESTING})
+set(BUILD_TESTING OFF)
+set(LIBXS_FORTRAN OFF)
+add_subdirectory(libxs)
+set(BUILD_TESTING ${PERNIX_BENCHMARK_BUILD_TESTING})
+unset(PERNIX_BENCHMARK_BUILD_TESTING)
+unset(LIBXS_FORTRAN)
+
+target_compile_options(libxs PRIVATE -O3)
+if (CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|i[3-6]86|i686)$")
+        # Compile a portable x86 baseline plus libxs's runtime-dispatched AVX paths.
+        target_compile_definitions(libxs PRIVATE LIBXS_STATIC_TARGET_ARCH=1002)
+endif ()
+
 set(CP2K_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cp2k")
 set(CP2K_PATCH_FILE "${CMAKE_CURRENT_SOURCE_DIR}/cp2k-patches/0001-Delete-unneeded-types-hfx_types.F.patch")
 

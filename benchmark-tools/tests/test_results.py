@@ -118,6 +118,39 @@ def test_loads_and_normalizes_pcie_results(tmp_path: Path) -> None:
     assert d2h["payload_bytes"] == 67108864
 
 
+def test_loads_and_normalizes_libxs_vpack_results(tmp_path: Path) -> None:
+    _write_result(
+        tmp_path / "benchmark_libxs_results.json",
+        [
+            "BM_libxs_compress_i64_sparse_g8/4096",
+            "BM_libxs_decompress_u16_broad_g32/262144",
+        ],
+    )
+
+    results = load_benchmark_results(tmp_path, family="kernel")
+    contexts = load_benchmark_contexts(tmp_path, family="kernel")
+
+    assert contexts["implementation"].tolist() == ["libxs"]
+
+    compressed = results.loc[results["direction"].eq("compression")].iloc[0]
+    assert compressed["implementation"] == "libxs"
+    assert compressed["value_type"] == "i64"
+    assert compressed["profile"] == "sparse"
+    assert compressed["group"] == 8
+    assert compressed["bit_width"] == 64
+    assert pd.isna(compressed["blocks"])
+    assert compressed["elements"] == 4096
+    assert compressed["benchmark_schema"] == "libxs_vpack_v1"
+
+    decompressed = results.loc[results["direction"].eq("decompression")].iloc[0]
+    assert decompressed["value_type"] == "u16"
+    assert decompressed["profile"] == "broad"
+    assert decompressed["group"] == 32
+    assert decompressed["bit_width"] == 16
+    assert pd.isna(decompressed["blocks"])
+    assert decompressed["elements"] == 262144
+
+
 def test_parses_google_benchmark_aggregate_name_suffixes(tmp_path: Path) -> None:
     path = tmp_path / "benchmark_pcie_avx512vbmi_results.json"
     path.write_text(

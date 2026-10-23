@@ -11,7 +11,15 @@ from pathlib import Path
 from rich.logging import RichHandler
 
 from .model import ModelOptions, generate_incore_models
-from .runner import PERNIX_VARIANTS, RunOptions, run_all, run_cp2k, run_pcie, run_pernix
+from .runner import (
+    PERNIX_VARIANTS,
+    RunOptions,
+    run_all,
+    run_cp2k,
+    run_libxs,
+    run_pcie,
+    run_pernix,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -129,6 +137,10 @@ def _handle_cp2k(args: argparse.Namespace) -> int:
     return run_cp2k(_options(args))
 
 
+def _handle_libxs(args: argparse.Namespace) -> int:
+    return run_libxs(_options(args))
+
+
 def _handle_pcie(args: argparse.Namespace) -> int:
     return run_pcie(args.variant, _options(args))
 
@@ -195,6 +207,10 @@ def build_parser() -> argparse.ArgumentParser:
     cp2k_parser = run_commands.add_parser("cp2k", help="Run CP2K benchmarks.")
     _add_run_options(cp2k_parser, suppress_defaults=True)
     cp2k_parser.set_defaults(handler=_handle_cp2k)
+
+    libxs_parser = run_commands.add_parser("libxs", help="Run libxs_vpack benchmarks.")
+    _add_run_options(libxs_parser, suppress_defaults=True)
+    libxs_parser.set_defaults(handler=_handle_libxs)
 
     pcie_parser = run_commands.add_parser(
         "pcie", help="Run CUDA PCIe end-to-end Pernix benchmarks on x86."

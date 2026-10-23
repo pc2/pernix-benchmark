@@ -57,3 +57,10 @@ work. For this repository, that means the `cp2k_compression` target and any benc
 linked against it are intended to be distributed under GPL-2.0-or-later terms, while independent
 benchmark targets that do not incorporate or link CP2K code remain under their own applicable
 licenses.
+
+## libxs BSD-Covered Components
+
+The `external/libxs` submodule is licensed under BSD-3-Clause. The `libxs` library target and the
+`bench_libxs` executable link against this library. See `external/libxs/LICENSE` for the
+authoritative terms. The benchmark harness source remains independently licensed under this
+repository's MIT license.

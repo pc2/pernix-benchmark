@@ -123,3 +123,13 @@ if (BUILD_TESTING)
     target_link_libraries(cp2k_benchmark_adapter_test PRIVATE cp2k_benchmark_adapter)
     add_test(NAME cp2k_benchmark_adapter_test COMMAND cp2k_benchmark_adapter_test)
 endif ()
+
+add_executable(bench_libxs main.cpp libxs/libxs_benchmarks.cpp)
+target_link_libraries(bench_libxs PRIVATE
+        pernix_benchmark_optimization
+        ${BENCHMARK_LDFLAGS}
+        libxs::libxs)
+target_compile_options(bench_libxs PRIVATE ${BENCHMARK_CFLAGS})
+target_include_directories(bench_libxs PRIVATE
+        ${CMAKE_SOURCE_DIR}/external/libxs
+        ${CMAKE_SOURCE_DIR}/external/libxs/libxs)

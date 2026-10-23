@@ -28,6 +28,17 @@ def test_run_cp2k_command_is_registered_with_shared_options() -> None:
     assert callable(args.handler)
 
 
+def test_run_libxs_command_is_registered_with_shared_options() -> None:
+    args = build_parser().parse_args(
+        ["run", "libxs", "--compiler", "clang++", "--jobs", "4"]
+    )
+
+    assert args.benchmark == "libxs"
+    assert args.compiler == "clang++"
+    assert args.jobs == 4
+    assert callable(args.handler)
+
+
 def test_run_pcie_command_is_registered_with_shared_options() -> None:
     args = build_parser().parse_args(["run", "pcie", "avx2", "--clean"])
 
@@ -175,6 +186,15 @@ def test_main_dispatches_pcie_options() -> None:
     assert result == 0
     variant, options = run.call_args.args
     assert variant == "bmi2"
+    assert options.benchmark_min_time == 0.5
+
+
+def test_main_dispatches_libxs_options() -> None:
+    with patch("pernix_benchmark_tools.__main__.run_libxs", return_value=0) as run:
+        result = main(["run", "libxs", "--benchmark-min-time", "0.5"])
+
+    assert result == 0
+    options = run.call_args.args[0]
     assert options.benchmark_min_time == 0.5
 
 

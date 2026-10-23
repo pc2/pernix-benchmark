@@ -4,3 +4,6 @@
 [submodule "external/cp2k"]
 	path = external/cp2k
 	url = https://github.com/cp2k/cp2k/
+[submodule "external/libxs"]
+	path = external/libxs
+	url = https://github.com/hfp/libxs
