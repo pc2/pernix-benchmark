@@ -13,7 +13,7 @@ fi
 benchmark_job_id="$(
     sbatch \
         --parsable \
-        --array=0-3%4 \
+        --array=0-4%4 \
         --exclusive \
         "${JOB_SCRIPT}" \
         benchmark

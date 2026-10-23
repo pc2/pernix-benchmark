@@ -18,13 +18,15 @@ cd ..
 
 The CPU batch job also loads GCC 14.3, LLVM 20, and LIKWID. If the site module versions change, locate replacements with `find_module` and update both the setup commands and launcher.
 
+Run `git submodule update --init external/libxs` before submitting the CPU benchmark jobs.
+
 ## CPU benchmarks and instruction model
 
 ```console
 slurm/submit-otus-benchmarks.sh
 ```
 
-The wrapper submits AVX2, AVX2+BMI2, AVX-512-VBMI, and CP2K as a four-task array. Each task receives an exclusive 192-core `normal` node for up to four hours. A one-CPU, 8 GiB instruction-model job is submitted with an `afterok` dependency on the complete array.
+The wrapper submits AVX2, AVX2+BMI2, AVX-512-VBMI, CP2K, and libxs_vpack as a five-task array, with up to four tasks running concurrently. Each task receives an exclusive 192-core `normal` node for up to six hours. A one-CPU, 8 GiB instruction-model job is submitted with an `afterok` dependency on the complete array.
 
 Both stages write to `benchmark-results/otus-<array-job-id>/`. Machine-state filenames are task-specific, array logs use `slurm-pernix-benchmarks-<array-job-id>_<task-id>.out`, and temporary build directories are removed when jobs exit.
 
