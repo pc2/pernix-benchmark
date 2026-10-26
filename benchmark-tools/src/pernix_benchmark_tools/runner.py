@@ -166,7 +166,12 @@ def resolve_output_dir(
     return repository / "benchmark-results" / timestamp
 
 
-def _create_project(repository: Path, options: RunOptions) -> CMakeProject:
+def _create_project(
+    repository: Path,
+    options: RunOptions,
+    *,
+    enable_cp2k: bool,
+) -> CMakeProject:
     return CMakeProject(
         source_dir=repository,
         build_dir=resolve_build_dir(repository, options),
@@ -174,6 +179,7 @@ def _create_project(repository: Path, options: RunOptions) -> CMakeProject:
         jobs=options.jobs or os.cpu_count() or 1,
         definitions={
             "CMAKE_CXX_COMPILER": options.compiler,
+            "PERNIX_BENCHMARK_ENABLE_CP2K": "ON" if enable_cp2k else "OFF",
             "PERNIX_BENCHMARK_ENABLE_CUDA": "ON" if options.enable_cuda else "OFF",
         },
     )
@@ -307,7 +313,7 @@ def _run_targets(targets: tuple[str, ...], options: RunOptions) -> Path:
     output_dir = resolve_output_dir(repository, options)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    project = _create_project(repository, options)
+    project = _create_project(repository, options, enable_cp2k="cp2k" in targets)
     project.configure(fresh=options.clean)
 
     built_targets: list[tuple[str, Path]] = []

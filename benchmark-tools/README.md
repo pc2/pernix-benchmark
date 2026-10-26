@@ -11,7 +11,7 @@ uv sync
 uv run pernix-bench --help
 ```
 
-The CMake build requires the recursively initialized Pernix, CP2K, and libxs submodules, a C/C++/Fortran toolchain, `pkg-config`, and Google Benchmark. PCIe runs additionally require the CUDA Toolkit and a visible NVIDIA GPU.
+The CMake build requires the Pernix and libxs submodules, a C/C++ toolchain, `pkg-config`, and Google Benchmark. CP2K runs also require the CP2K submodule and a Fortran compiler. PCIe runs additionally require the CUDA Toolkit and a visible NVIDIA GPU.
 
 ## Run benchmarks
 

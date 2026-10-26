@@ -18,7 +18,13 @@ cd ..
 
 The CPU batch job also loads GCC 14.3, LLVM 20, and LIKWID. If the site module versions change, locate replacements with `find_module` and update both the setup commands and launcher.
 
-Run `git submodule update --init external/libxs` before submitting the CPU benchmark jobs.
+Initialize the sources used by the CPU benchmark array before submitting:
+
+```console
+git submodule update --init --recursive external/pernix external/cp2k external/libxs
+```
+
+The Pernix and libxs tasks do not require the CP2K checkout, but the CP2K array task does.
 
 ## CPU benchmarks and instruction model
 

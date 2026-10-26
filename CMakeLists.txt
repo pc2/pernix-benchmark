@@ -1,5 +1,11 @@
 cmake_minimum_required(VERSION 3.30)
-project(libcompression VERSION 0.1.0 LANGUAGES CXX C Fortran)
+option(PERNIX_BENCHMARK_ENABLE_CP2K "Build CP2K benchmark targets" ON)
+
+if (PERNIX_BENCHMARK_ENABLE_CP2K)
+    project(libcompression VERSION 0.1.0 LANGUAGES CXX C Fortran)
+else ()
+    project(libcompression VERSION 0.1.0 LANGUAGES CXX C)
+endif ()
 
 include(CTest)
 
