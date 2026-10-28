@@ -16,6 +16,7 @@ from .runner import (
     RunOptions,
     run_all,
     run_cp2k,
+    run_compare,
     run_libxs,
     run_pcie,
     run_pernix,
@@ -141,6 +142,10 @@ def _handle_libxs(args: argparse.Namespace) -> int:
     return run_libxs(_options(args))
 
 
+def _handle_compare(args: argparse.Namespace) -> int:
+    return run_compare(args.isa, _options(args))
+
+
 def _handle_pcie(args: argparse.Namespace) -> int:
     return run_pcie(args.variant, _options(args))
 
@@ -211,6 +216,13 @@ def build_parser() -> argparse.ArgumentParser:
     libxs_parser = run_commands.add_parser("libxs", help="Run libxs_vpack benchmarks.")
     _add_run_options(libxs_parser, suppress_defaults=True)
     libxs_parser.set_defaults(handler=_handle_libxs)
+
+    compare_parser = run_commands.add_parser(
+        "compare", help="Run paired Pernix and libxs_vpack workloads for one ISA."
+    )
+    compare_parser.add_argument("isa", choices=("scalar", "avx2", "avx512vbmi"))
+    _add_run_options(compare_parser, suppress_defaults=True)
+    compare_parser.set_defaults(handler=_handle_compare)
 
     pcie_parser = run_commands.add_parser(
         "pcie", help="Run CUDA PCIe end-to-end Pernix benchmarks on x86."

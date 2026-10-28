@@ -87,9 +87,9 @@ if [[ "${JOB_MODE}" == "benchmark" ]]; then
 
     case "${SLURM_ARRAY_TASK_ID}" in
         0)
-            TASK_LABEL="AVX2"
-            TASK_NAME="pernix_avx2"
-            TASK_ARGUMENTS=(pernix avx2)
+            TASK_LABEL="Scalar paired comparison"
+            TASK_NAME="compare_scalar"
+            TASK_ARGUMENTS=(compare scalar)
             ;;
         1)
             TASK_LABEL="AVX2+BMI2"
@@ -97,19 +97,19 @@ if [[ "${JOB_MODE}" == "benchmark" ]]; then
             TASK_ARGUMENTS=(pernix bmi2)
             ;;
         2)
-            TASK_LABEL="AVX-512-VBMI"
-            TASK_NAME="pernix_avx512vbmi"
-            TASK_ARGUMENTS=(pernix avx512vbmi)
+            TASK_LABEL="AVX2 paired comparison"
+            TASK_NAME="compare_avx2"
+            TASK_ARGUMENTS=(compare avx2)
             ;;
         3)
+            TASK_LABEL="AVX-512-VBMI paired comparison"
+            TASK_NAME="compare_avx512vbmi"
+            TASK_ARGUMENTS=(compare avx512vbmi)
+            ;;
+        4)
             TASK_LABEL="CP2K"
             TASK_NAME="cp2k"
             TASK_ARGUMENTS=(cp2k)
-            ;;
-        4)
-            TASK_LABEL="libxs_vpack"
-            TASK_NAME="libxs"
-            TASK_ARGUMENTS=(libxs)
             ;;
         *)
             echo "Unsupported array task: ${SLURM_ARRAY_TASK_ID}" >&2

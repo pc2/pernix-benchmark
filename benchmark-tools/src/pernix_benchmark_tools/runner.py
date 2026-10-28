@@ -398,6 +398,31 @@ def run_libxs(options: RunOptions) -> int:
     return 0
 
 
+def run_compare(variant: str, options: RunOptions) -> int:
+    host = detect_host()
+    if host.architecture != "x86":
+        raise RuntimeError("Paired ISA comparisons currently require an x86 host")
+    required = {
+        "scalar": frozenset(),
+        "avx2": frozenset({"avx2", "fma"}),
+        # Pernix needs VBMI; the matched libxs build targets generic AVX-512-VNNI.
+        "avx512vbmi": frozenset(
+            {"avx2", "fma", "avx512f", "avx512cd", "avx512dq", "avx512bw",
+             "avx512vl", "avx512vnni", "avx512vbmi"}
+        ),
+    }
+    if variant not in required:
+        raise RuntimeError(f"Unsupported comparison ISA: {variant!r}")
+    missing = required[variant] - host.features
+    if missing:
+        raise RuntimeError(
+            f"Comparison ISA {variant!r} requires missing CPU feature(s): "
+            f"{', '.join(sorted(missing))}"
+        )
+    _run_targets((f"compare_{variant}",), options)
+    return 0
+
+
 def run_pcie(
     variant: str | None,
     options: RunOptions,

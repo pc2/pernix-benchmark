@@ -135,3 +135,32 @@ target_compile_options(bench_libxs PRIVATE ${BENCHMARK_CFLAGS})
 target_include_directories(bench_libxs PRIVATE
         ${CMAKE_SOURCE_DIR}/external/libxs
         ${CMAKE_SOURCE_DIR}/external/libxs/libxs)
+
+function(add_compare_benchmark variant compile_opts)
+    if (variant STREQUAL "avx512vbmi")
+        set(libxs_variant avx512)
+    else ()
+        set(libxs_variant ${variant})
+    endif ()
+    add_executable(bench_compare_${variant} main.cpp compare/compare_benchmarks.cpp)
+    target_link_libraries(bench_compare_${variant} PRIVATE
+            pernix_benchmark_optimization
+            ${BENCHMARK_LDFLAGS}
+            libxs_compare_${libxs_variant})
+    target_compile_options(bench_compare_${variant} PRIVATE ${compile_opts} ${ARGN} ${BENCHMARK_CFLAGS})
+    target_include_directories(bench_compare_${variant} PRIVATE
+            ${CMAKE_SOURCE_DIR}/external/pernix/include
+            ${CMAKE_SOURCE_DIR}/external/libxs
+            ${CMAKE_SOURCE_DIR}/external/libxs/libxs)
+    if (variant STREQUAL "avx2")
+        target_compile_definitions(bench_compare_${variant} PRIVATE PERNIX_COMPARE_AVX2=1)
+    elseif (variant STREQUAL "avx512vbmi")
+        target_compile_definitions(bench_compare_${variant} PRIVATE PERNIX_COMPARE_AVX512VBMI=1)
+    endif ()
+endfunction()
+
+if (PERNIX_BENCHMARK_TARGET_IS_X86)
+    add_compare_benchmark(scalar -g -march=x86-64)
+    add_compare_benchmark(avx2 -g -march=x86-64 -mavx2 -mfma)
+    add_compare_benchmark(avx512vbmi -g -march=x86-64-v4 -mavx512vbmi)
+endif ()

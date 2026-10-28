@@ -36,6 +36,14 @@ LIBXS_BENCHMARK_RE = re.compile(
     r"(?P<value_type>[iu](?:8|16|32|64))_"
     r"(?P<profile>broad|sparse)_g(?P<group>\d+)/(?P<elements>\d+)$"
 )
+COMPARE_BENCHMARK_RE = re.compile(
+    r"^BM_compare_(?P<implementation>pernix|libxs)_"
+    r"(?P<direction>compress|decompress)_(?P<profile>dense|sparse)_"
+    r"w(?P<bit_width>\d+)/(?P<requested_elements>\d+)$"
+)
+COMPARE_RESULT_RE = re.compile(
+    r"^benchmark_compare_(?P<isa>[A-Za-z0-9]+)_results\.json$"
+)
 ResultFamily = Literal["kernel", "pcie"]
 
 
@@ -152,6 +160,21 @@ def _parse_libxs(frame: pd.DataFrame, path: Path) -> pd.DataFrame:
     return extracted
 
 
+def _parse_compare(frame: pd.DataFrame, path: Path, isa: str) -> pd.DataFrame:
+    extracted = _names_for_parsing(frame).str.extract(COMPARE_BENCHMARK_RE)
+    _require_matches(frame["name"], extracted, path.name)
+    extracted["direction"] = extracted["direction"].map(
+        {"compress": "compression", "decompress": "decompression"}
+    )
+    extracted["value_type"] = "f32"
+    extracted["isa"] = isa
+    extracted["core_throughput"] = False
+    extracted["memory_mode"] = "paired"
+    extracted["blocks"] = pd.NA
+    extracted["benchmark_schema"] = "paired_compare_v1"
+    return extracted
+
+
 def _normalize_file(path: Path) -> tuple[pd.DataFrame, dict[str, object]]:
     frame, context = _read_result(path)
     if "name" not in frame:
@@ -159,10 +182,13 @@ def _normalize_file(path: Path) -> tuple[pd.DataFrame, dict[str, object]]:
 
     pcie_match = PCIE_RESULT_RE.fullmatch(path.name)
     pernix_match = PERNIX_RESULT_RE.fullmatch(path.name)
+    compare_match = COMPARE_RESULT_RE.fullmatch(path.name)
     if pcie_match:
         extracted = _parse_pcie(frame, path, pcie_match.group("implementation"))
     elif pernix_match:
         extracted = _parse_pernix(frame, path, pernix_match.group("implementation"))
+    elif compare_match:
+        extracted = _parse_compare(frame, path, compare_match.group("isa"))
     elif path.name == "benchmark_cp2k_results.json":
         extracted = _parse_cp2k(frame, path)
     elif path.name == "benchmark_libxs_results.json":

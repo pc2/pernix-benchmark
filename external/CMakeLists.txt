@@ -8,6 +8,7 @@
 
 # libxs ships its own tests under BUILD_TESTING. Keep those from inheriting
 # this repository's CTest setting; the benchmark only needs the library target.
+find_package(Threads REQUIRED)
 set(PERNIX_BENCHMARK_BUILD_TESTING ${BUILD_TESTING})
 set(BUILD_TESTING OFF)
 set(LIBXS_FORTRAN OFF)
@@ -20,6 +21,37 @@ target_compile_options(libxs PRIVATE -O3)
 if (CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|i[3-6]86|i686)$")
         # Compile a portable x86 baseline plus libxs's runtime-dispatched AVX paths.
         target_compile_definitions(libxs PRIVATE LIBXS_STATIC_TARGET_ARCH=1002)
+
+        # Build comparison-only libxs copies capped at the corresponding ISA.
+        # This makes each paired executable compare equivalent ISA ceilings.
+        file(GLOB LIBXS_COMPARE_SOURCES CONFIGURE_DEPENDS
+                "${CMAKE_CURRENT_SOURCE_DIR}/libxs/src/*.c")
+        foreach (variant IN ITEMS scalar avx2 avx512)
+                if (variant STREQUAL "scalar")
+                        set(target_arch 1002)
+                elseif (variant STREQUAL "avx2")
+                        set(target_arch 1006)
+                else ()
+                        set(target_arch 1100)
+                endif ()
+                add_library(libxs_compare_${variant} STATIC ${LIBXS_COMPARE_SOURCES})
+                target_compile_definitions(libxs_compare_${variant} PRIVATE
+                        LIBXS_BUILD=1
+                        LIBXS_STATIC_TARGET_ARCH=1002
+                        LIBXS_MAX_STATIC_TARGET_ARCH=${target_arch})
+                target_include_directories(libxs_compare_${variant} PUBLIC
+                        "${CMAKE_CURRENT_SOURCE_DIR}/libxs"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/libxs/libxs"
+                        "${CMAKE_CURRENT_BINARY_DIR}/libxs")
+                target_compile_options(libxs_compare_${variant} PRIVATE -O3)
+                target_link_libraries(libxs_compare_${variant} PUBLIC Threads::Threads ${CMAKE_DL_LIBS})
+                if (LIBXS_HAS_LIBM)
+                        target_link_libraries(libxs_compare_${variant} PUBLIC m)
+                endif ()
+                if (LIBXS_HAS_LIBRT)
+                        target_link_libraries(libxs_compare_${variant} PUBLIC rt)
+                endif ()
+        endforeach ()
 endif ()
 
 if (PERNIX_BENCHMARK_ENABLE_CP2K)
