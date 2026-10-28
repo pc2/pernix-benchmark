@@ -65,7 +65,17 @@ def parse_cpuinfo_features(contents: str) -> frozenset[str]:
     for line in contents.splitlines():
         key, separator, value = line.partition(":")
         if separator and key.strip().lower() in {"flags", "features"}:
-            feature_sets.append(set(value.lower().split()))
+            features = value.lower().split()
+            # Linux spells several AVX-512 extensions with an underscore
+            # (for example avx512_vnni); use the names expected by the ISA map.
+            feature_sets.append(
+                {
+                    "avx512" + feature.removeprefix("avx512_")
+                    if feature.startswith("avx512_")
+                    else feature
+                    for feature in features
+                }
+            )
     if not feature_sets:
         return frozenset()
     return frozenset(set.intersection(*feature_sets))
