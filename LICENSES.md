@@ -26,7 +26,7 @@ modify, or link against CP2K source code:
   CP2K-derived target.
 - Benchmark executables linked against `cp2k_compression`, including `bench_cp2k`.
 - Source files that are specific to the CP2K benchmark path and are compiled into such executables,
-  including files under `src/cp2k/`.
+  including files under `src/cp2k/` and the grouped HFX codec in `src/hfx/`.
 
 The current CP2K-derived source subset is defined in `external/CMakeLists.txt` as
 `CP2K_SOURCE_FILES`. At the time of writing, it includes:

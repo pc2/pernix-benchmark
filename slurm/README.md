@@ -24,7 +24,7 @@ Initialize the sources used by the CPU benchmark array before submitting:
 git submodule update --init --recursive external/pernix external/cp2k external/libxs
 ```
 
-The Pernix and libxs tasks do not require the CP2K checkout, but the CP2K array task does.
+The Pernix and libxs tasks do not require the CP2K checkout. The CP2K and HFX array tasks do.
 
 ## CPU benchmarks and instruction model
 
@@ -32,9 +32,9 @@ The Pernix and libxs tasks do not require the CP2K checkout, but the CP2K array 
 slurm/submit-otus-benchmarks.sh
 ```
 
-The wrapper submits scalar, AVX2, and AVX-512-VBMI paired comparisons, an AVX2+BMI2 Pernix reference run, and CP2K as a five-task array, with up to four tasks running concurrently. Each paired comparison runs Pernix and libxs on the same deterministic F32-derived integer values at widths 1–24 and two profiles. Both libraries are built with a matching ISA ceiling: scalar, AVX2, and AVX-512. The AVX-512 comparison uses Pernix AVX-512-VBMI and libxs's generic AVX-512 target; libxs does not have a VBMI-specific vpack kernel. Each task receives an exclusive 192-core `normal` node for up to six hours. A one-CPU, 8 GiB instruction-model job is submitted with an `afterok` dependency on the complete array.
+The wrapper submits scalar, AVX2, and AVX-512-VBMI paired comparisons, an AVX2+BMI2 Pernix reference run, CP2K, and the HFX codec comparison as a six-task array, with up to four tasks running concurrently. Each paired comparison runs Pernix and libxs on the same deterministic F32-derived integer values at widths 1–24 and two profiles. Both libraries are built with a matching ISA ceiling: scalar, AVX2, and AVX-512. The AVX-512 comparison uses Pernix AVX-512-VBMI and libxs's generic AVX-512 target; libxs does not have a VBMI-specific vpack kernel. The HFX task compares CP2K's original fixed-width methods, LIBXS group-8 packing, and Pernix on the same synthetic tensor across separate scalar, AVX2, and AVX-512-VBMI builds. It requires AVX-512-VNNI and AVX-512-VBMI support. Each task receives an exclusive 192-core `normal` node for up to six hours. A one-CPU, 8 GiB instruction-model job is submitted with an `afterok` dependency on the complete array.
 
-Both stages write to `benchmark-results/otus-<array-job-id>/`. Machine-state filenames are task-specific, array logs use `slurm-pernix-benchmarks-<array-job-id>_<task-id>.out`, and temporary build directories are removed when jobs exit.
+Both stages write to `benchmark-results/otus-<array-job-id>/`. HFX produces `benchmark_hfx_scalar_results.json`, `benchmark_hfx_avx2_results.json`, and `benchmark_hfx_avx512_results.json`. Machine-state filenames are task-specific, array logs use `slurm-pernix-benchmarks-<array-job-id>_<task-id>.out`, and temporary build directories, including all three HFX ISA builds, are removed when jobs exit.
 
 Paired benchmark JSON files use names such as `benchmark_compare_avx2_results.json`. Their `stream_bytes` and `bits_per_value` counters show encoded size; compare those alongside compression/decompression time. Pernix stores fixed-width blocks while libxs stores a variable-width stream with per-group metadata, so encoded sizes are expected to differ. Compare matching ISA, profile, width, and element count. `pernix-bench run compare {scalar|avx2|avx512vbmi}` runs one paired suite manually. The existing `pernix-bench run libxs` command remains available for libxs-specific group-size sweeps.
 

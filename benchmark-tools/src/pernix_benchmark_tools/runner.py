@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import platform
 import re
 import subprocess
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 
@@ -19,6 +20,24 @@ logger = logging.getLogger(__name__)
 PERNIX_VARIANTS = ("fallback", "avx2", "bmi2", "avx512vbmi", "neon", "sve2")
 X86_VARIANTS = ("fallback", "avx2", "bmi2", "avx512vbmi")
 ARM64_VARIANTS = ("fallback", "neon", "sve2")
+HFX_ISAS = ("scalar", "avx2", "avx512")
+HFX_REQUIRED_FEATURES: dict[str, frozenset[str]] = {
+    "scalar": frozenset(),
+    "avx2": frozenset({"avx2", "fma"}),
+    "avx512": frozenset(
+        {
+            "avx2",
+            "fma",
+            "avx512f",
+            "avx512cd",
+            "avx512dq",
+            "avx512bw",
+            "avx512vl",
+            "avx512vnni",
+            "avx512vbmi",
+        }
+    ),
+}
 
 REQUIRED_FEATURES: dict[str, frozenset[str]] = {
     "fallback": frozenset(),
@@ -181,17 +200,21 @@ def _create_project(
     options: RunOptions,
     *,
     enable_cp2k: bool,
+    hfx_isa: str | None = None,
 ) -> CMakeProject:
+    definitions = {
+        "CMAKE_CXX_COMPILER": options.compiler,
+        "PERNIX_BENCHMARK_ENABLE_CP2K": "ON" if enable_cp2k else "OFF",
+        "PERNIX_BENCHMARK_ENABLE_CUDA": "ON" if options.enable_cuda else "OFF",
+    }
+    if hfx_isa is not None:
+        definitions["PERNIX_BENCHMARK_HFX_ISA"] = hfx_isa
     return CMakeProject(
         source_dir=repository,
         build_dir=resolve_build_dir(repository, options),
         build_type=options.build_type,
         jobs=options.jobs or os.cpu_count() or 1,
-        definitions={
-            "CMAKE_CXX_COMPILER": options.compiler,
-            "PERNIX_BENCHMARK_ENABLE_CP2K": "ON" if enable_cp2k else "OFF",
-            "PERNIX_BENCHMARK_ENABLE_CUDA": "ON" if options.enable_cuda else "OFF",
-        },
+        definitions=definitions,
     )
 
 
@@ -318,12 +341,24 @@ def _report_slurm_progress(
         logger.warning("Could not update SLURM job progress: %s", error)
 
 
-def _run_targets(targets: tuple[str, ...], options: RunOptions) -> Path:
+def _run_targets(
+    targets: tuple[str, ...],
+    options: RunOptions,
+    *,
+    runtime_environment: dict[str, str] | None = None,
+    hfx_isa: str | None = None,
+    result_tag: str | None = None,
+) -> Path:
     repository = find_repository_root()
     output_dir = resolve_output_dir(repository, options)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    project = _create_project(repository, options, enable_cp2k="cp2k" in targets)
+    project = _create_project(
+        repository,
+        options,
+        enable_cp2k=bool({"cp2k", "hfx"}.intersection(targets)),
+        hfx_isa=hfx_isa,
+    )
     project.configure(fresh=options.clean)
 
     built_targets: list[tuple[str, Path]] = []
@@ -353,7 +388,7 @@ def _run_targets(targets: tuple[str, ...], options: RunOptions) -> Path:
             elapsed_seconds=elapsed_seconds,
             remaining_seconds=remaining_seconds,
         )
-        output_file = output_dir / f"benchmark_{target}_results.json"
+        output_file = output_dir / f"benchmark_{result_tag or target}_results.json"
         command = [
             str(executable),
             f"--benchmark_out={output_file}",
@@ -373,8 +408,15 @@ def _run_targets(targets: tuple[str, ...], options: RunOptions) -> Path:
             f"--benchmark_context=build_type={options.build_type}",
             f"--benchmark_context=benchmark_target={target}",
         ]
+        if hfx_isa is not None:
+            command.append(f"--benchmark_context=benchmark_isa={hfx_isa}")
         logger.info("Running benchmark target: %s", target)
-        subprocess.run(command, cwd=project.build_dir, check=True)
+        if runtime_environment:
+            environment = os.environ.copy()
+            environment.update(runtime_environment)
+            subprocess.run(command, cwd=project.build_dir, check=True, env=environment)
+        else:
+            subprocess.run(command, cwd=project.build_dir, check=True)
         logger.info("Results saved to %s", output_file)
 
     _report_slurm_progress(
@@ -400,6 +442,50 @@ def run_pernix(
 
 def run_cp2k(options: RunOptions) -> int:
     _run_targets(("cp2k",), options)
+    return 0
+
+
+def run_hfx(options: RunOptions, scale: float = 1.0) -> int:
+    if not math.isfinite(scale) or scale <= 0:
+        raise RuntimeError("HFX scale must be finite and greater than zero")
+    host = detect_host()
+    if host.architecture != "x86":
+        raise RuntimeError("HFX ISA comparisons currently require an x86 host")
+
+    missing_by_isa = {
+        isa: HFX_REQUIRED_FEATURES[isa] - host.features
+        for isa in HFX_ISAS
+        if HFX_REQUIRED_FEATURES[isa] - host.features
+    }
+    if missing_by_isa:
+        details = "; ".join(
+            f"{isa}: {', '.join(sorted(missing))}"
+            for isa, missing in missing_by_isa.items()
+        )
+        raise RuntimeError(
+            "HFX requires CPU support for scalar, AVX2, and AVX-512 runs; "
+            f"missing feature(s): {details}"
+        )
+
+    repository = find_repository_root()
+    base_build_dir = resolve_build_dir(repository, options)
+    output_dir = resolve_output_dir(repository, options)
+    runtime_environment = {"PERNIX_HFX_SCALE": f"{scale:.17g}"}
+    for isa in HFX_ISAS:
+        build_dir = base_build_dir.with_name(f"{base_build_dir.name}_hfx_{isa}")
+        isa_options = replace(
+            options,
+            build_dir=str(build_dir),
+            output_dir=str(output_dir),
+        )
+        logger.info("Running HFX comparison with %s ISA", isa)
+        _run_targets(
+            ("hfx",),
+            isa_options,
+            runtime_environment=runtime_environment,
+            hfx_isa=isa,
+            result_tag=f"hfx_{isa}",
+        )
     return 0
 
 

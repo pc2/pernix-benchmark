@@ -111,6 +111,11 @@ if [[ "${JOB_MODE}" == "benchmark" ]]; then
             TASK_NAME="cp2k"
             TASK_ARGUMENTS=(cp2k)
             ;;
+        5)
+            TASK_LABEL="CP2K HFX codec comparison"
+            TASK_NAME="hfx"
+            TASK_ARGUMENTS=(hfx)
+            ;;
         *)
             echo "Unsupported array task: ${SLURM_ARRAY_TASK_ID}" >&2
             exit 2
@@ -134,6 +139,11 @@ export PERNIX_MACHINE_STATE_FILENAME="machinestate_${TASK_NAME}.json"
 
 cleanup() {
     rm -rf -- "${BUILD_DIR}"
+    if [[ "${TASK_NAME}" == "hfx" ]]; then
+        rm -rf -- "${BUILD_DIR}_hfx_scalar" \
+            "${BUILD_DIR}_hfx_avx2" \
+            "${BUILD_DIR}_hfx_avx512"
+    fi
 }
 trap cleanup EXIT
 
@@ -149,7 +159,7 @@ echo "Result directory:      ${RESULT_DIR}"
 echo "Allocated CPUs:        ${SLURM_CPUS_PER_TASK}"
 
 if [[ "${JOB_MODE}" == "benchmark" ]]; then
-    echo "Array task:            ${SLURM_ARRAY_TASK_ID}/4"
+    echo "Array task:            ${SLURM_ARRAY_TASK_ID}/5"
     echo "Benchmark min time:    ${BENCHMARK_MIN_TIME_SECONDS} s"
     echo "Benchmark repetitions: ${BENCHMARK_REPETITIONS}"
     echo "Benchmark warm-up:     ${BENCHMARK_MIN_WARMUP_TIME_SECONDS} s"

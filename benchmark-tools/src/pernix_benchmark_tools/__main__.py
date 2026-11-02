@@ -17,6 +17,7 @@ from .runner import (
     run_all,
     run_cp2k,
     run_compare,
+    run_hfx,
     run_libxs,
     run_pcie,
     run_pernix,
@@ -142,6 +143,10 @@ def _handle_libxs(args: argparse.Namespace) -> int:
     return run_libxs(_options(args))
 
 
+def _handle_hfx(args: argparse.Namespace) -> int:
+    return run_hfx(_options(args), args.scale)
+
+
 def _handle_compare(args: argparse.Namespace) -> int:
     return run_compare(args.isa, _options(args))
 
@@ -216,6 +221,17 @@ def build_parser() -> argparse.ArgumentParser:
     libxs_parser = run_commands.add_parser("libxs", help="Run libxs_vpack benchmarks.")
     _add_run_options(libxs_parser, suppress_defaults=True)
     libxs_parser.set_defaults(handler=_handle_libxs)
+
+    hfx_parser = run_commands.add_parser(
+        "hfx",
+        help="Compare CP2K, LIBXS, and Pernix HFX packing for scalar, AVX2, and AVX-512.",
+    )
+    hfx_parser.add_argument(
+        "--scale", type=_positive_finite_float, default=1.0,
+        help="Quantization scale applied before packing (default: 1.0)."
+    )
+    _add_run_options(hfx_parser, suppress_defaults=True)
+    hfx_parser.set_defaults(handler=_handle_hfx)
 
     compare_parser = run_commands.add_parser(
         "compare", help="Run paired Pernix and libxs_vpack workloads for one ISA."

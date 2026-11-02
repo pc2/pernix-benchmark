@@ -6,6 +6,23 @@
 # as GPL-2.0-or-later. See ../LICENSES.md.
 # Apply a repository patch to CP2K source files before building the compression methods.
 
+set(PERNIX_BENCHMARK_HFX_ISA "native" CACHE STRING "ISA ceiling for the HFX benchmark build")
+set_property(CACHE PERNIX_BENCHMARK_HFX_ISA PROPERTY STRINGS native scalar avx2 avx512)
+if (PERNIX_BENCHMARK_HFX_ISA STREQUAL "scalar")
+        set(PERNIX_BENCHMARK_HFX_ISA_FLAGS -march=x86-64)
+elseif (PERNIX_BENCHMARK_HFX_ISA STREQUAL "avx2")
+        set(PERNIX_BENCHMARK_HFX_ISA_FLAGS -march=x86-64 -mavx2 -mfma)
+elseif (PERNIX_BENCHMARK_HFX_ISA STREQUAL "avx512")
+        set(PERNIX_BENCHMARK_HFX_ISA_FLAGS
+                -march=x86-64 -mavx2 -mfma
+                -mavx512f -mavx512cd -mavx512dq -mavx512bw -mavx512vl
+                -mavx512vnni -mavx512vbmi)
+elseif (PERNIX_BENCHMARK_HFX_ISA STREQUAL "native")
+        set(PERNIX_BENCHMARK_HFX_ISA_FLAGS -march=native)
+else ()
+        message(FATAL_ERROR "Unsupported PERNIX_BENCHMARK_HFX_ISA=${PERNIX_BENCHMARK_HFX_ISA}")
+endif ()
+
 # libxs ships its own tests under BUILD_TESTING. Keep those from inheriting
 # this repository's CTest setting; the benchmark only needs the library target.
 find_package(Threads REQUIRED)
@@ -119,7 +136,12 @@ if (PERNIX_BENCHMARK_ENABLE_CP2K)
 
     add_library(cp2k_compression STATIC ${CP2K_SOURCE_FILES})
     target_link_libraries(cp2k_compression PRIVATE pernix_benchmark_optimization)
-    target_compile_options(cp2k_compression PRIVATE $<$<COMPILE_LANGUAGE:Fortran>:-ffree-form -ffree-line-length-none -g -march=native>)
+    target_compile_options(cp2k_compression PRIVATE
+            $<$<COMPILE_LANGUAGE:Fortran>:-ffree-form>
+            $<$<COMPILE_LANGUAGE:Fortran>:-ffree-line-length-none>
+            $<$<COMPILE_LANGUAGE:Fortran>:-g>
+            ${PERNIX_BENCHMARK_HFX_ISA_FLAGS}
+    )
     target_compile_definitions(cp2k_compression PRIVATE
             $<$<COMPILE_LANGUAGE:Fortran>:__SHORT_FILE__=\"__FILE__\">
             __DATA_DIR=""

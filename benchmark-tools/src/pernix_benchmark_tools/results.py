@@ -44,7 +44,16 @@ COMPARE_BENCHMARK_RE = re.compile(
 COMPARE_RESULT_RE = re.compile(
     r"^benchmark_compare_(?P<isa>[A-Za-z0-9]+)_results\.json$"
 )
-ResultFamily = Literal["kernel", "pcie"]
+HFX_BENCHMARK_RE = re.compile(
+    r"^BM_hfx_(?P<direction>compress|decompress)_"
+    r"(?P<implementation>cp2k_original|libxs_group8|"
+    r"pernix_(?:scalar|avx2|avx512vbmi|fallback))_w(?P<bit_width>\d+)_"
+    r"(?P<fixture>.+)/(?P<elements>\d+)$"
+)
+HFX_RESULT_RE = re.compile(
+    r"^benchmark_hfx(?:_(?P<isa>scalar|avx2|avx512))?_results\.json$"
+)
+ResultFamily = Literal["kernel", "pcie", "hfx"]
 
 
 def _read_result(path: Path) -> tuple[pd.DataFrame, dict[str, object]]:
@@ -175,6 +184,27 @@ def _parse_compare(frame: pd.DataFrame, path: Path, isa: str) -> pd.DataFrame:
     return extracted
 
 
+def _parse_hfx(frame: pd.DataFrame, path: Path, isa: str) -> pd.DataFrame:
+    extracted = _names_for_parsing(frame).str.extract(HFX_BENCHMARK_RE)
+    _require_matches(frame["name"], extracted, path.name)
+    extracted["direction"] = extracted["direction"].map(
+        {"compress": "compression", "decompress": "decompression"}
+    )
+    extracted["value_type"] = "i64"
+    extracted["isa"] = isa
+    extracted["core_throughput"] = False
+    extracted["memory_mode"] = "hfx_cache"
+    extracted["profile"] = extracted["fixture"]
+    extracted["group"] = extracted["implementation"].map(
+        {"cp2k_original": 0, "libxs_group8": 8}
+    )
+    extracted.loc[extracted["implementation"].str.startswith("pernix_"), "group"] = 0
+    extracted["blocks"] = pd.NA
+    extracted["payload_bytes"] = pd.NA
+    extracted["benchmark_schema"] = "hfx_cache_v1"
+    return extracted
+
+
 def _normalize_file(path: Path) -> tuple[pd.DataFrame, dict[str, object]]:
     frame, context = _read_result(path)
     if "name" not in frame:
@@ -183,6 +213,7 @@ def _normalize_file(path: Path) -> tuple[pd.DataFrame, dict[str, object]]:
     pcie_match = PCIE_RESULT_RE.fullmatch(path.name)
     pernix_match = PERNIX_RESULT_RE.fullmatch(path.name)
     compare_match = COMPARE_RESULT_RE.fullmatch(path.name)
+    hfx_match = HFX_RESULT_RE.fullmatch(path.name)
     if pcie_match:
         extracted = _parse_pcie(frame, path, pcie_match.group("implementation"))
     elif pernix_match:
@@ -193,6 +224,11 @@ def _normalize_file(path: Path) -> tuple[pd.DataFrame, dict[str, object]]:
         extracted = _parse_cp2k(frame, path)
     elif path.name == "benchmark_libxs_results.json":
         extracted = _parse_libxs(frame, path)
+    elif hfx_match:
+        isa = hfx_match.group("isa") or str(
+            context.get("benchmark_isa", "native")
+        )
+        extracted = _parse_hfx(frame, path, isa)
     else:
         raise ValueError(f"Unsupported benchmark result filename: {path.name}")
 
@@ -244,9 +280,16 @@ def _result_files(
         )
     files = sorted(directory.glob("benchmark_*_results.json"))
     if family == "kernel":
-        files = [path for path in files if PCIE_RESULT_RE.fullmatch(path.name) is None]
+        files = [
+            path
+            for path in files
+            if PCIE_RESULT_RE.fullmatch(path.name) is None
+            and HFX_RESULT_RE.fullmatch(path.name) is None
+        ]
     elif family == "pcie":
         files = [path for path in files if PCIE_RESULT_RE.fullmatch(path.name) is not None]
+    elif family == "hfx":
+        files = [path for path in files if HFX_RESULT_RE.fullmatch(path.name) is not None]
     if not files:
         description = f"{family} benchmark " if family is not None else "benchmark "
         raise FileNotFoundError(f"No {description}result JSON files found in {directory}")
@@ -290,23 +333,28 @@ def load_benchmark_contexts(
     rows: list[dict[str, object]] = []
     for path in _result_files(result_dir, family=family):
         _, context = _normalize_file(path)
-        implementation = (
-            "cp2k"
-            if path.name == "benchmark_cp2k_results.json"
-            else "libxs"
-            if path.name == "benchmark_libxs_results.json"
-            else (
+        hfx_match = HFX_RESULT_RE.fullmatch(path.name)
+        if path.name == "benchmark_cp2k_results.json":
+            implementation = "cp2k"
+        elif path.name == "benchmark_libxs_results.json":
+            implementation = "libxs"
+        elif hfx_match:
+            implementation = "hfx"
+        else:
+            implementation = (
                 PCIE_RESULT_RE.fullmatch(path.name)
                 or PERNIX_RESULT_RE.fullmatch(path.name)
             ).group("implementation")  # type: ignore[union-attr]
-        )
-        rows.append(
-            {
-                "implementation": implementation,
-                "source_file": path.name,
-                **context,
-            }
-        )
+        row = {
+            "implementation": implementation,
+            "source_file": path.name,
+            **context,
+        }
+        if hfx_match:
+            row["isa"] = hfx_match.group("isa") or context.get(
+                "benchmark_isa", "native"
+            )
+        rows.append(row)
     return pd.json_normalize(rows).sort_values("implementation", ignore_index=True)
 
 

@@ -28,6 +28,7 @@ uv run pernix-bench run pernix
 uv run pernix-bench run pernix avx2
 uv run pernix-bench run cp2k
 uv run pernix-bench run libxs
+uv run pernix-bench run hfx
 uv run pernix-bench run pcie
 uv run pernix-bench run pcie avx2
 ```
@@ -35,6 +36,8 @@ uv run pernix-bench run pcie avx2
 Pernix implementations are `fallback`, `avx2`, `bmi2`, `avx512vbmi`, `neon`, and `sve2`. The runner rejects explicitly selected implementations that are incompatible with the host. ARM NEON and SVE2 targets currently provide decompression benchmarks only.
 
 The libxs suite times `libxs_vpack` and `libxs_vunpack` for signed and unsigned 8-, 16-, 32-, and 64-bit values, group sizes 1–32, and broad or sparse synthetic inputs. Inputs are deterministic, and results include packed bytes, bits per value, compression ratio, and throughput.
+
+The HFX suite compares CP2K's original fixed-width codec, `libxs_vpack` with group size 8, and Pernix on the same deterministic synthetic 64×32×16 tensor in three separately compiled and run ISA variants: scalar, AVX2, and AVX-512-VBMI. The tensor has mostly zero or small values and a sparse wide-magnitude tail. It quantizes at widths 2–24 using `--scale` (default: `1.0`) and stores 1024-value cache batches in 1024-word in-memory container nodes. Each codec retains its native payload framing: CP2K's fixed-width stream, LIBXS's length-prefixed group record, or Pernix's fixed-size blocks. Results are written to `benchmark_hfx_scalar_results.json`, `benchmark_hfx_avx2_results.json`, and `benchmark_hfx_avx512_results.json`; each file records its ISA and includes the implementation name, synthetic profile, dimensions, scale, logical packed size, allocated container size, compression ratio, and throughput. The runner requires an x86 host with AVX2 and AVX-512 support, including VNNI for LIBXS and VBMI for Pernix. With `--build-dir DIR`, it creates separate sibling build directories named `DIR_hfx_scalar`, `DIR_hfx_avx2`, and `DIR_hfx_avx512`. The LIBXS path follows [CP2K PR #6352](https://github.com/cp2k/cp2k/pull/6352).
 
 Run commands accept `--compiler`, `--build-type`, `--jobs`, `--build-dir`, `--output-dir`, `--clean`, `--benchmark-min-time`, `--benchmark-repetitions`, and `--benchmark-min-warmup-time`. Use the relevant subcommand's `--help` for defaults and details.
 

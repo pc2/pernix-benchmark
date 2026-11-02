@@ -119,6 +119,63 @@ if (PERNIX_BENCHMARK_ENABLE_CP2K)
         target_link_libraries(bench_cp2k PUBLIC OpenMP::OpenMP_CXX)
     endif ()
 
+    add_executable(bench_hfx
+            main.cpp
+            cp2k/hfx_original_codec.f90
+            hfx/hfx_benchmarks.cpp)
+    if (PERNIX_BENCHMARK_HFX_ISA STREQUAL "scalar")
+        set(PERNIX_BENCHMARK_HFX_ISA_FLAGS -march=x86-64)
+    elseif (PERNIX_BENCHMARK_HFX_ISA STREQUAL "avx2")
+        set(PERNIX_BENCHMARK_HFX_ISA_FLAGS -march=x86-64 -mavx2 -mfma)
+    elseif (PERNIX_BENCHMARK_HFX_ISA STREQUAL "avx512")
+        set(PERNIX_BENCHMARK_HFX_ISA_FLAGS
+                -march=x86-64 -mavx2 -mfma
+                -mavx512f -mavx512cd -mavx512dq -mavx512bw -mavx512vl
+                -mavx512vnni -mavx512vbmi)
+    else ()
+        set(PERNIX_BENCHMARK_HFX_ISA_FLAGS -march=native)
+    endif ()
+    target_link_libraries(bench_hfx PRIVATE
+            pernix_benchmark_optimization
+            ${BENCHMARK_LDFLAGS}
+            cp2k_compression)
+    if (PERNIX_BENCHMARK_TARGET_IS_X86)
+        if (PERNIX_BENCHMARK_HFX_ISA STREQUAL "scalar")
+            target_link_libraries(bench_hfx PRIVATE libxs_compare_scalar)
+            target_compile_definitions(bench_hfx PRIVATE PERNIX_HFX_SCALAR=1)
+        elseif (PERNIX_BENCHMARK_HFX_ISA STREQUAL "avx2")
+            target_link_libraries(bench_hfx PRIVATE libxs_compare_avx2)
+            target_compile_definitions(bench_hfx PRIVATE PERNIX_HFX_AVX2=1)
+        elseif (PERNIX_BENCHMARK_HFX_ISA STREQUAL "avx512")
+            target_link_libraries(bench_hfx PRIVATE libxs_compare_avx512)
+            target_compile_definitions(bench_hfx PRIVATE PERNIX_HFX_AVX512=1)
+        else ()
+            target_link_libraries(bench_hfx PRIVATE libxs::libxs)
+        endif ()
+    else ()
+        if (NOT PERNIX_BENCHMARK_HFX_ISA STREQUAL "native")
+            message(FATAL_ERROR "HFX ISA variants require an x86 target")
+        endif ()
+        target_link_libraries(bench_hfx PRIVATE libxs::libxs)
+    endif ()
+    target_include_directories(bench_hfx PRIVATE
+            ${CMAKE_SOURCE_DIR}/external/pernix/include
+            ${CMAKE_SOURCE_DIR}/external/libxs
+            ${CMAKE_SOURCE_DIR}/external/libxs/libxs
+            pernix/include
+            "${CMAKE_BINARY_DIR}/fortran_modules/cp2k")
+    target_compile_options(bench_hfx PRIVATE
+            ${PERNIX_BENCHMARK_HFX_ISA_FLAGS}
+            ${BENCHMARK_CFLAGS}
+            -g)
+    target_compile_options(bench_hfx PRIVATE $<$<COMPILE_LANGUAGE:Fortran>:-ffree-line-length-none>)
+    add_dependencies(bench_hfx cp2k_compression)
+    set_target_properties(bench_hfx PROPERTIES
+            Fortran_MODULE_DIRECTORY "${CMAKE_BINARY_DIR}/fortran_modules/hfx_benchmark")
+    if (OpenMP_CXX_FOUND)
+        target_link_libraries(bench_hfx PUBLIC OpenMP::OpenMP_CXX)
+    endif ()
+
     if (BUILD_TESTING)
         add_executable(cp2k_benchmark_adapter_test ../tests/cp2k_benchmark_adapter_test.cpp)
         target_link_libraries(cp2k_benchmark_adapter_test PRIVATE cp2k_benchmark_adapter)
